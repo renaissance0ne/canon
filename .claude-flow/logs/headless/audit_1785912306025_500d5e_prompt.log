@@ -1,0 +1,503 @@
+[2026-08-05T06:45:06.081Z] PROMPT
+============================================================
+Analyze this codebase for security vulnerabilities:
+- Check for hardcoded secrets (API keys, passwords)
+- Identify SQL injection risks
+- Find XSS vulnerabilities
+- Check for insecure dependencies
+- Identify authentication/authorization issues
+
+Provide a JSON report with:
+{
+  "vulnerabilities": [{ "severity": "high|medium|low", "file": "...", "line": N, "description": "..." }],
+  "riskScore": 0-100,
+  "recommendations": ["..."]
+}
+
+## Codebase Context
+
+--- .agents/skills/clerk-backend-api/scripts/extract-tags.js ---
+let input = "";
+process.stdin.on("data", d => input += d);
+process.stdin.on("end", () => {
+  const lines = input.replace(/\r/g, "").split("\n");
+  let inTags = false;
+  for (const line of lines) {
+    if (line === "tags:") { inTags = true; continue; }
+    if (inTags && line.length > 0 && line[0] !== " ") break;
+    if (inTags) {
+      const m = line.match(/^\s{2}- name:\s*(.+)/);
+      if (m) console.log(m[1]);
+    }
+  }
+});
+
+
+--- .agents/skills/clerk-astro-patterns/templates/astro-basic-auth/src/middleware.ts ---
+import { clerkMiddleware } from "@clerk/astro/server"
+
+export const onRequest = clerkMiddleware()
+
+
+--- .agents/skills/clerk-nextjs-patterns/templates/nextjs-basic-auth/proxy.ts ---
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware()
+
+export const config = {
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/(api|trpc)(.*)',
+  ],
+}
+
+
+--- .agents/skills/clerk-nuxt-patterns/templates/nuxt-basic-auth/nuxt.config.ts ---
+export default defineNuxtConfig({
+  modules: ['@clerk/nuxt'],
+})
+
+
+--- .agents/skills/clerk-react-patterns/templates/react-basic-auth/vite.config.ts ---
+import react from "@vitejs/plugin-react"
+import { defineConfig } from "vite"
+
+export default defineConfig({
+	plugins: [react()],
+})
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/app/routes.ts ---
+import { type RouteConfig, index } from "@react-router/dev/routes"
+
+export default [index("routes/home.tsx")] satisfies RouteConfig
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/react-router.config.ts ---
+import type { Config } from '@react-router/dev/config'
+
+export default {
+  ssr: true,
+} satisfies Config
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/vite.config.ts ---
+import { reactRouter } from "@react-router/dev/vite"
+import { defineConfig } from "vite"
+
+export default defineConfig({
+	plugins: [reactRouter()],
+	// React Router v8 dev SSR externalizes @clerk/react-router, which then resolves
+	// react-router's production build while the app uses the development build —
+	// two Router contexts, and useNavigate() throws inside ClerkProvider.
+	// See https://github.com/remix-run/react-router/issues/15232
+	ssr: {
+		noExternal: ["@clerk/react-router"],
+	},
+})
+
+
+--- .agents/skills/clerk-tanstack-patterns/templates/tanstack-basic-auth/src/start.ts ---
+import { clerkMiddleware } from '@clerk/tanstack-react-start/server';
+import { createStart } from '@tanstack/react-start';
+
+export const startInstance = createStart(() => {
+  return {
+    requestMiddleware: [clerkMiddleware()],
+  };
+});
+
+
+--- .agents/skills/clerk-tanstack-patterns/templates/tanstack-basic-auth/vite.config.ts ---
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { defineConfig } from 'vite'
+import tsConfigPaths from 'vite-tsconfig-paths'
+import viteReact from '@vitejs/plugin-react'
+
+export default defineConfig({
+  server: {
+    port: 3000,
+  },
+  plugins: [
+    tsConfigPaths({
+      projects: ['./tsconfig.json'],
+    }),
+    tanstackStart(),
+    viteReact(),
+  ],
+})
+
+
+--- .agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts ---
+import { createApp } from 'vue'
+import './style.css'
+import App from './App.vue'
+import { clerkPlugin } from '@clerk/vue'
+
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+if (!PUBLISHABLE_KEY) {
+  throw new Error('Add your Clerk Publishable Key to the .env file')
+}
+
+const app = createApp(App)
+app.use(clerkPlugin, { publishableKey: PUBLISHABLE_KEY })
+app.mount('#app')
+
+
+--- .agents/skills/clerk-vue-patterns/templates/vue-basic-auth/vite.config.ts ---
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+
+export default defineConfig({
+  plugins: [vue()],
+})
+
+
+--- web/drizzle.config.ts ---
+import { defineConfig } from "drizzle-kit";
+
+/**
+ * Drizzle owns the schema for BOTH layers. The engine reads and writes the
+ * same Postgres but never migrates it — `npx drizzle-kit generate` and
+ * `npx drizzle-kit migrate` are run from web/ only.
+ */
+/**
+ * Migrations run over a SESSION-mode connection, not the transaction pooler the
+ * app uses at runtime: drizzle-kit issues DDL and introspection with prepared
+ * statements, and Supavisor transaction mode (port 6543) cannot serve those.
+ * Falls back to DATABASE_URL so a direct-connection setup still works unchanged.
+ */
+const migrationUrl = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
+
+if (!migrationUrl) {
+  throw new Error("Set MIGRATION_DATABASE_URL (or DATABASE_URL) in web/.env before migrating.");
+}
+
+export default defineConfig({
+  dialect: "postgresql",
+  schema: "./lib/db/schema.ts",
+  out: "./drizzle",
+  dbCredentials: { url: migrationUrl },
+  strict: true,
+  verbose: true,
+});
+
+
+--- web/lib/cn.ts ---
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+
+--- web/lib/db/index.ts ---
+import "server-only";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import * as schema from "./schema";
+
+/**
+ * The db client. SERVER ONLY — DATABASE_URL must never reach a client bundle,
+ * so this module is `server-only` and is imported exclusively by Server
+ * Components and route handlers.
+ *
+ * Connected lazily, on first query rather than on import: `next build`
+ * evaluates every server module while collecting page data, and a build must
+ * not require a live database. A missing DATABASE_URL fails at the call site,
+ * where the message is actionable.
+ */
+type CanonDb = PostgresJsDatabase<typeof schema>;
+
+/**
+ * Next.js reloads modules on every HMR pass in dev, so the connection is
+ * cached on globalThis — otherwise each reload opens another pooler client.
+ */
+const globalForDb = globalThis as unknown as {
+  canonSql?: ReturnType<typeof postgres>;
+  canonDb?: CanonDb;
+};
+
+export function getDb(): CanonDb {
+  if (globalForDb.canonDb) return globalForDb.canonDb;
+
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is not set. Add it to web/.env — server-side only, never NEXT_PUBLIC_.",
+    );
+  }
+
+  // Supabase's transaction pooler does not support prepared statements.
+  const sql = globalForDb.canonSql ?? postgres(url, { prepare: false });
+  const db = drizzle(sql, { schema });
+
+  globalForDb.canonSql = sql;
+  globalForDb.canonDb = db;
+  return db;
+}
+
+export { schema };
+
+
+--- web/lib/db/schema.ts (truncated) ---
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  real,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+import type { CanonicalEntity } from "@/types/entity";
+import type { SurvivorshipRule } from "@/types/rules";
+import type { RunStats, RunStatus } from "@/types/run";
+import type {
+  ConflictClass,
+  MatchMethod,
+  MatchSignals,
+  Severity,
+} from "@/types/conflict";
+import type { AuditAction, ResolutionStatus } from "@/types/resolution";
+import type { SourceConfig, SourceKind } from "@/types/source";
+
+/**
+ * The single source of truth for Canon's schema. Drizzle owns it; the engine
+ * reads and writes the same Postgres but never migrates it.
+ *
+ * Two writers, split by TABLE OWNERSHIP — this is what keeps runs
+ * reproducible, and it is not enforced by the network topology:
+ *
+ *   sources     web only                    (engine must never write)
+ *   rulesets    web only                    (engine must never write)
+ *   runs        web creates, engine updates status
+ *   entities    engine only                 (web must never write)
+ *   matches     engine only                 (web must never write)
+ *   conflicts   engine only                 (web must never write)
+ *   resolutions engine proposes, web records human review
+ *   audit_log   both, append-only           (never updated, never deleted)
+ */
+
+/** A configured system Canon reads from. Non-secret connection shape only. */
+export const sources = pgTable("sources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  kind: text("kind").$type<SourceKind>().notNull(),
+  /** NEVER credentials. Secrets live in the engine env, keyed by `kind`. */
+  config: jsonb("config").$type<SourceConfig>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Survivorship rules, versioned. Never edited in place: a run records which
+ * rulesetId it used, and mutable rules would make past runs unreproducible.
+ */
+export const rulesets = pgTable("rulesets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  version: integer("version").notNull().default(1),
+  rules: jsonb("rules").$type<SurvivorshipRule[]>().notNull(),
+  isActive: boolean("is_active").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** One reconciliation execution. */
+export const runs = pgTable("runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** The CRM side. */
+  sourceAId: uuid("source_a_id")
+    .notNull()
+    .references(() => sources.id),
+  /** The warehouse side. */
+  sourceBId: uuid("source_b_id")
+    .notNull()
+    .references(() => sources.id),
+  rulesetId: uuid("ruleset_id")
+    .notNull()
+    .references(() => rulesets.id),
+  status: text("status").$type<RunStatus>().notNull().default("queued"),
+  stats: jsonb("stats").$type<RunStats>().notNull(),
+  error: text("error"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
+
+/**
+ * The parts of a CanonicalEntity that are not promoted to their own column.
+ * externalId, entityType, parentExternalId and lastModifiedAt are columns
+ * because matching and survivorship read them directly.
+ */
+export type EntityFields = Pick<
+  CanonicalEntity,
+  "name" | "normalizedName" | "attributes"
+>;
+
+/** Normalized records from both sides, per run. Written by the engine only. */
+export const entities = pgTable(
+  "entities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id),
+    /** The id in the source system. */
+    externalId: text("external_id").notNull(),
+    entityType: text("entity_type").$type<CanonicalEntity["entityType"]>().notNull(),
+    fields: jsonb("fields").$type<EntityFields>().notNull(),
+    /** The hierarchy edge. */
+    parentExternalId: text("parent_external_id"),
+    /** Drives recency survivorship. */
+    lastModifiedAt: timestamp("last_modified_at", { withTimezone: true }),
+  },
+  (table) => [index("entities_run_source_external_idx").on(table.runId, table.sourceId, table.externalId)],
+);
+
+/** A pair of entities believed to be the same real-world thing. */
+export const matches = pgTable("matches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id")
+    .notNull()
+    .references(() => runs.id),
+  entityAId: uuid("entity_a_id")
+    .notNull()
+    .references(() => entities.id),
+  entityBId: uuid("entity_b_id")
+    .notNull()
+    .references(() => entities.id),
+  /** 0..1 */
+  confidence: real("confidence").notNull(),
+  method: text("method").$type<MatchMethod>().notNull(),
+  signals: jsonb("signals").$type<MatchSignals>().notNull(),
+});
+
+/** A field-level disagreement within a match. */
+export const conflicts = pgTable("conflicts", {
+  id: uu
+
+--- web/lib/server/sources.ts ---
+import "server-only";
+import { connection } from "next/server";
+import { getDb } from "@/lib/db";
+import { sources } from "@/lib/db/schema";
+import { sourceSchema, type Source } from "@/types/source";
+
+/**
+ * Server Component data access. Everything in the console is a Server
+ * Component; TanStack Query is reserved for run-status polling only.
+ *
+ * `sources` is web-owned: the engine reads this table but must never write it.
+ */
+export async function listSources(): Promise<Source[]> {
+  // Configured sources are request-time state, not build-time. `connection()`
+  // stops prerendering here, so every consumer of this function is dynamic and
+  // no page bakes in the source list it happened to see at build.
+  await connection();
+
+  const rows = await getDb().select().from(sources).orderBy(sources.createdAt);
+  return rows.map((row) => sourceSchema.parse(row));
+}
+
+export async function countSourcesBySide() {
+  const all = await listSources();
+  return {
+    crm: all.filter((s) => s.kind === "salesforce" || s.kind === "hubspot").length,
+    warehouse: all.filter((s) => s.kind === "databricks" || s.kind === "snowflake").length,
+    synthetic: all.filter((s) => s.kind === "synthetic").length,
+  };
+}
+
+
+--- web/next-env.d.ts ---
+/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+import "./.next/types/routes.d.ts";
+import "./.next/types/root-params.d.ts";
+
+// NOTE: This file should not be edited
+// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
+
+
+--- web/next.config.ts ---
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* config options here */
+};
+
+export default nextConfig;
+
+
+--- web/types/conflict.ts ---
+import { z } from "zod";
+
+/** Tool contract — mirrors engine/pipeline/schema.py. */
+export const conflictClassSchema = z.enum([
+  "structural",
+  "attribute",
+  "cosmetic",
+  "orphan",
+  "duplicate",
+]);
+
+/**
+ * Severity is a defined integer the auto-apply threshold reads, not a hue and
+ * not a vibe (AGENTS.md § Severity Model).
+ *
+ *   4 structural — changes the shape of the hierarchy; rollups will be wrong
+ *   3 attribute  — changes who owns or is credited for something
+ *   2 attribute  — changes a non-rollup field
+ *   1 cosmetic   — same value, different representation
+ */
+export const severitySchema = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+]);
+
+export const matchMethodSchema = z.enum(["exact_key", "embedding", "fuzzy", "agent"]);
+
+export const matchSignalsSchema = z.object({
+  exactKey: z.boolean(),
+  cosine: z.number(),
+  fuzzyRatio: z.number(),
+});
+
+export const conflictSchema = z.object({
+  id: z.string().uuid(),
+  runId: z.string().uuid(),
+  matchId: z.string().uuid(),
+  field: z.string(),
+  valueA: z.string(),
+  valueB: z.string(),
+  conflictClass: conflictClassSchema,
+  severity: severitySchema,
+  detectedBy: z.enum(["rule", "agent"]),
+});
+
+export type ConflictClass = z.infer<typeof conflictClassSchema>;
+export type Severity = z.infer<typeof severitySchema>;
+export type MatchMethod = z.infer<typeof matchMethodSchema>;
+export type MatchSignals = z.infer<typeof matchSignalsSchema>;
+export type Conflict = z.infer<typeof conflictSchema>;
+
+/** Never rendered without its word — the mark alone is never the only signal. */
+export const SEVERITY_LABEL: Record<Severity, string> = {
+  4: "Structural",
+  3: "Attribute",
+  2: "Attribute",
+  1: "Cosmetic",
+};
+
+
+## Instructions
+
+Analyze the above codebase context and provide your response following the format specified in the task.

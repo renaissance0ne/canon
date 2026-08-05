@@ -1,0 +1,750 @@
+[2026-08-05T05:52:57.199Z] PROMPT
+============================================================
+Analyze this codebase for security vulnerabilities:
+- Check for hardcoded secrets (API keys, passwords)
+- Identify SQL injection risks
+- Find XSS vulnerabilities
+- Check for insecure dependencies
+- Identify authentication/authorization issues
+
+Provide a JSON report with:
+{
+  "vulnerabilities": [{ "severity": "high|medium|low", "file": "...", "line": N, "description": "..." }],
+  "riskScore": 0-100,
+  "recommendations": ["..."]
+}
+
+## Codebase Context
+
+--- drizzle.config.ts ---
+import { defineConfig } from "drizzle-kit";
+
+/**
+ * Drizzle owns the schema for BOTH layers. The engine reads and writes the
+ * same Postgres but never migrates it — `npx drizzle-kit generate` and
+ * `npx drizzle-kit migrate` are run from web/ only.
+ */
+/**
+ * Migrations run over a SESSION-mode connection, not the transaction pooler the
+ * app uses at runtime: drizzle-kit issues DDL and introspection with prepared
+ * statements, and Supavisor transaction mode (port 6543) cannot serve those.
+ * Falls back to DATABASE_URL so a direct-connection setup still works unchanged.
+ */
+const migrationUrl = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
+
+if (!migrationUrl) {
+  throw new Error("Set MIGRATION_DATABASE_URL (or DATABASE_URL) in web/.env before migrating.");
+}
+
+export default defineConfig({
+  dialect: "postgresql",
+  schema: "./lib/db/schema.ts",
+  out: "./drizzle",
+  dbCredentials: { url: migrationUrl },
+  strict: true,
+  verbose: true,
+});
+
+
+--- lib/cn.ts ---
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+
+--- lib/db/index.ts ---
+import "server-only";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import * as schema from "./schema";
+
+/**
+ * The db client. SERVER ONLY — DATABASE_URL must never reach a client bundle,
+ * so this module is `server-only` and is imported exclusively by Server
+ * Components and route handlers.
+ *
+ * Connected lazily, on first query rather than on import: `next build`
+ * evaluates every server module while collecting page data, and a build must
+ * not require a live database. A missing DATABASE_URL fails at the call site,
+ * where the message is actionable.
+ */
+type CanonDb = PostgresJsDatabase<typeof schema>;
+
+/**
+ * Next.js reloads modules on every HMR pass in dev, so the connection is
+ * cached on globalThis — otherwise each reload opens another pooler client.
+ */
+const globalForDb = globalThis as unknown as {
+  canonSql?: ReturnType<typeof postgres>;
+  canonDb?: CanonDb;
+};
+
+export function getDb(): CanonDb {
+  if (globalForDb.canonDb) return globalForDb.canonDb;
+
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is not set. Add it to web/.env — server-side only, never NEXT_PUBLIC_.",
+    );
+  }
+
+  // Supabase's transaction pooler does not support prepared statements.
+  const sql = globalForDb.canonSql ?? postgres(url, { prepare: false });
+  const db = drizzle(sql, { schema });
+
+  globalForDb.canonSql = sql;
+  globalForDb.canonDb = db;
+  return db;
+}
+
+export { schema };
+
+
+--- lib/db/schema.ts (truncated) ---
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  real,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+import type { CanonicalEntity } from "@/types/entity";
+import type { SurvivorshipRule } from "@/types/rules";
+import type { RunStats, RunStatus } from "@/types/run";
+import type {
+  ConflictClass,
+  MatchMethod,
+  MatchSignals,
+  Severity,
+} from "@/types/conflict";
+import type { AuditAction, ResolutionStatus } from "@/types/resolution";
+import type { SourceConfig, SourceKind } from "@/types/source";
+
+/**
+ * The single source of truth for Canon's schema. Drizzle owns it; the engine
+ * reads and writes the same Postgres but never migrates it.
+ *
+ * Two writers, split by TABLE OWNERSHIP — this is what keeps runs
+ * reproducible, and it is not enforced by the network topology:
+ *
+ *   sources     web only                    (engine must never write)
+ *   rulesets    web only                    (engine must never write)
+ *   runs        web creates, engine updates status
+ *   entities    engine only                 (web must never write)
+ *   matches     engine only                 (web must never write)
+ *   conflicts   engine only                 (web must never write)
+ *   resolutions engine proposes, web records human review
+ *   audit_log   both, append-only           (never updated, never deleted)
+ */
+
+/** A configured system Canon reads from. Non-secret connection shape only. */
+export const sources = pgTable("sources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  kind: text("kind").$type<SourceKind>().notNull(),
+  /** NEVER credentials. Secrets live in the engine env, keyed by `kind`. */
+  config: jsonb("config").$type<SourceConfig>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Survivorship rules, versioned. Never edited in place: a run records which
+ * rulesetId it used, and mutable rules would make past runs unreproducible.
+ */
+export const rulesets = pgTable("rulesets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  version: integer("version").notNull().default(1),
+  rules: jsonb("rules").$type<SurvivorshipRule[]>().notNull(),
+  isActive: boolean("is_active").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** One reconciliation execution. */
+export const runs = pgTable("runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** The CRM side. */
+  sourceAId: uuid("source_a_id")
+    .notNull()
+    .references(() => sources.id),
+  /** The warehouse side. */
+  sourceBId: uuid("source_b_id")
+    .notNull()
+    .references(() => sources.id),
+  rulesetId: uuid("ruleset_id")
+    .notNull()
+    .references(() => rulesets.id),
+  status: text("status").$type<RunStatus>().notNull().default("queued"),
+  stats: jsonb("stats").$type<RunStats>().notNull(),
+  error: text("error"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
+
+/**
+ * The parts of a CanonicalEntity that are not promoted to their own column.
+ * externalId, entityType, parentExternalId and lastModifiedAt are columns
+ * because matching and survivorship read them directly.
+ */
+export type EntityFields = Pick<
+  CanonicalEntity,
+  "name" | "normalizedName" | "attributes"
+>;
+
+/** Normalized records from both sides, per run. Written by the engine only. */
+export const entities = pgTable(
+  "entities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id),
+    /** The id in the source system. */
+    externalId: text("external_id").notNull(),
+    entityType: text("entity_type").$type<CanonicalEntity["entityType"]>().notNull(),
+    fields: jsonb("fields").$type<EntityFields>().notNull(),
+    /** The hierarchy edge. */
+    parentExternalId: text("parent_external_id"),
+    /** Drives recency survivorship. */
+    lastModifiedAt: timestamp("last_modified_at", { withTimezone: true }),
+  },
+  (table) => [index("entities_run_source_external_idx").on(table.runId, table.sourceId, table.externalId)],
+);
+
+/** A pair of entities believed to be the same real-world thing. */
+export const matches = pgTable("matches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id")
+    .notNull()
+    .references(() => runs.id),
+  entityAId: uuid("entity_a_id")
+    .notNull()
+    .references(() => entities.id),
+  entityBId: uuid("entity_b_id")
+    .notNull()
+    .references(() => entities.id),
+  /** 0..1 */
+  confidence: real("confidence").notNull(),
+  method: text("method").$type<MatchMethod>().notNull(),
+  signals: jsonb("signals").$type<MatchSignals>().notNull(),
+});
+
+/** A field-level disagreement within a match. */
+export const conflicts = pgTable("conflicts", {
+  id: uu
+
+--- lib/server/sources.ts ---
+import "server-only";
+import { connection } from "next/server";
+import { getDb } from "@/lib/db";
+import { sources } from "@/lib/db/schema";
+import { sourceSchema, type Source } from "@/types/source";
+
+/**
+ * Server Component data access. Everything in the console is a Server
+ * Component; TanStack Query is reserved for run-status polling only.
+ *
+ * `sources` is web-owned: the engine reads this table but must never write it.
+ */
+export async function listSources(): Promise<Source[]> {
+  // Configured sources are request-time state, not build-time. `connection()`
+  // stops prerendering here, so every consumer of this function is dynamic and
+  // no page bakes in the source list it happened to see at build.
+  await connection();
+
+  const rows = await getDb().select().from(sources).orderBy(sources.createdAt);
+  return rows.map((row) => sourceSchema.parse(row));
+}
+
+export async function countSourcesBySide() {
+  const all = await listSources();
+  return {
+    crm: all.filter((s) => s.kind === "salesforce" || s.kind === "hubspot").length,
+    warehouse: all.filter((s) => s.kind === "databricks" || s.kind === "snowflake").length,
+    synthetic: all.filter((s) => s.kind === "synthetic").length,
+  };
+}
+
+
+--- next-env.d.ts ---
+/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+import "./.next/types/routes.d.ts";
+import "./.next/types/root-params.d.ts";
+
+// NOTE: This file should not be edited
+// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
+
+
+--- next.config.ts ---
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* config options here */
+};
+
+export default nextConfig;
+
+
+--- types/conflict.ts ---
+import { z } from "zod";
+
+/** Tool contract — mirrors engine/pipeline/schema.py. */
+export const conflictClassSchema = z.enum([
+  "structural",
+  "attribute",
+  "cosmetic",
+  "orphan",
+  "duplicate",
+]);
+
+/**
+ * Severity is a defined integer the auto-apply threshold reads, not a hue and
+ * not a vibe (AGENTS.md § Severity Model).
+ *
+ *   4 structural — changes the shape of the hierarchy; rollups will be wrong
+ *   3 attribute  — changes who owns or is credited for something
+ *   2 attribute  — changes a non-rollup field
+ *   1 cosmetic   — same value, different representation
+ */
+export const severitySchema = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+]);
+
+export const matchMethodSchema = z.enum(["exact_key", "embedding", "fuzzy", "agent"]);
+
+export const matchSignalsSchema = z.object({
+  exactKey: z.boolean(),
+  cosine: z.number(),
+  fuzzyRatio: z.number(),
+});
+
+export const conflictSchema = z.object({
+  id: z.string().uuid(),
+  runId: z.string().uuid(),
+  matchId: z.string().uuid(),
+  field: z.string(),
+  valueA: z.string(),
+  valueB: z.string(),
+  conflictClass: conflictClassSchema,
+  severity: severitySchema,
+  detectedBy: z.enum(["rule", "agent"]),
+});
+
+export type ConflictClass = z.infer<typeof conflictClassSchema>;
+export type Severity = z.infer<typeof severitySchema>;
+export type MatchMethod = z.infer<typeof matchMethodSchema>;
+export type MatchSignals = z.infer<typeof matchSignalsSchema>;
+export type Conflict = z.infer<typeof conflictSchema>;
+
+/** Never rendered without its word — the mark alone is never the only signal. */
+export const SEVERITY_LABEL: Record<Severity, string> = {
+  4: "Structural",
+  3: "Attribute",
+  2: "Attribute",
+  1: "Cosmetic",
+};
+
+
+--- types/entity.ts ---
+import { z } from "zod";
+
+/**
+ * Tool contract — mirrors engine/pipeline/schema.py::CanonicalEntity.
+ * Do not change one side without changing the other in the same commit.
+ */
+export const entityTypeSchema = z.enum(["account", "user", "role", "territory"]);
+
+export const canonicalEntitySchema = z.object({
+  externalId: z.string(),
+  entityType: entityTypeSchema,
+  name: z.string(),
+  /** Folded; what matching actually compares. Folding is recorded, not destructive. */
+  normalizedName: z.string(),
+  /** The hierarchy edge. */
+  parentExternalId: z.string().nullable(),
+  attributes: z.record(z.string(), z.string().nullable()),
+  /** ISO 8601 — drives recency survivorship. */
+  lastModifiedAt: z.string().nullable(),
+  sourceId: z.string(),
+});
+
+export type EntityType = z.infer<typeof entityTypeSchema>;
+export type CanonicalEntity = z.infer<typeof canonicalEntitySchema>;
+
+
+--- types/resolution.ts ---
+import { z } from "zod";
+
+/** Tool contract — mirrors engine/pipeline/schema.py. */
+export const resolutionStatusSchema = z.enum([
+  "proposed",
+  "auto_applied",
+  "escalated",
+  "approved",
+  "rejected",
+  "overridden",
+]);
+
+export const resolutionSchema = z.object({
+  id: z.string().uuid(),
+  conflictId: z.string().uuid(),
+  proposedValue: z.string(),
+  /** Plain-English, agent-authored. A reviewer decides from this in five seconds. */
+  rationale: z.string(),
+  /** Which survivorship rule fired, if any. */
+  appliedRuleId: z.string().nullable(),
+  confidence: z.number().min(0).max(1),
+  status: resolutionStatusSchema,
+  reviewedBy: z.string().nullable(),
+  /** What the human chose instead. */
+  overrideValue: z.string().nullable(),
+  createdAt: z.coerce.date(),
+  reviewedAt: z.coerce.date().nullable(),
+});
+
+/**
+ * PATCH /api/conflicts/:conflictId/resolution. Every action appends to
+ * audit_log — nothing is ever silently changed.
+ *
+ * `reviewedBy` is deliberately NOT in this body. The reviewer's identity is
+ * resolved server-side from the session and written to `resolutions.reviewedBy`
+ * and `audit_log.actor` there. An audit trail whose actor is whatever string
+ * the client sent is not an audit trail, and "who approved this" is the
+ * question the whole log exists to answer.
+ */
+export const reviewActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("approve") }),
+  z.object({ action: z.literal("reject") }),
+  z.object({
+    action: z.literal("override"),
+    overrideValue: z.string().min(1),
+  }),
+]);
+
+export type ResolutionStatus = z.infer<typeof resolutionSchema>["status"];
+export type Resolution = z.infer<typeof resolutionSchema>;
+export type ReviewAction = z.infer<typeof reviewActionSchema>;
+
+/** Append-only. Never updated, never deleted. */
+export const auditActionSchema = z.enum([
+  "run_started",
+  "conflict_detected",
+  "resolution_proposed",
+  "auto_applied",
+  "escalated",
+  "human_approved",
+  "human_overridden",
+  "run_failed",
+]);
+
+export type AuditAction = z.infer<typeof auditActionSchema>;
+
+
+--- types/rules.ts ---
+import { z } from "zod";
+
+/**
+ * Tool contract — mirrors engine/pipeline/schema.py::SurvivorshipRule.
+ *
+ * Rules are evaluated most specific first: exact `field` + exact `entityType`
+ * beats a wildcard on either. First match wins. If no rule matches, the
+ * conflict escalates — Canon never guesses in the absence of policy.
+ */
+export const ruleStrategySchema = z.enum([
+  /** One system is authoritative for this field. */
+  "prefer_source",
+  /** Newest lastModifiedAt wins. */
+  "most_recent",
+  /** Non-null / longer value wins. */
+  "most_complete",
+  /** Never auto-resolve this field. */
+  "escalate",
+]);
+
+export const survivorshipRuleSchema = z
+  .object({
+    id: z.string(),
+    /** "*" = applies to any field. */
+    field: z.string(),
+    entityType: z.string(),
+    strategy: ruleStrategySchema,
+    preferredSourceId: z.string().optional(),
+    /** Plain English — goes into the agent prompt. */
+    description: z.string(),
+  })
+  .refine(
+    (rule) => rule.strategy !== "prefer_source" || Boolean(rule.preferredSourceId),
+    { message: "preferredSourceId is required when strategy is prefer_source", path: ["preferredSourceId"] },
+  );
+
+export type RuleStrategy = z.infer<typeof ruleStrategySchema>;
+export type SurvivorshipRule = z.infer<typeof survivorshipRuleSchema>;
+
+/** Rulesets are versioned, never edited in place — a past run must still reproduce. */
+export const createRulesetSchema = z.object({
+  name: z.string().min(1).max(80),
+  rules: z.array(survivorshipRuleSchema).min(1),
+});
+
+export type CreateRuleset = z.infer<typeof createRulesetSchema>;
+
+/**
+ * Most specific first: exact field + exact entityType beats a wildcard on
+ * either. Ties keep author order, so the first match wins deterministically.
+ */
+export function ruleSpecificity(rule: SurvivorshipRule): number {
+  return (rule.field === "*" ? 0 : 2) + (rule.entityType === "*" ? 0 : 1);
+}
+
+
+--- types/run.ts ---
+import { z } from "zod";
+
+/** Tool contract — mirrors engine/pipeline/schema.py. */
+export const runStatusSchema = z.enum([
+  "queued",
+  "extracting",
+  "matching",
+  "detecting",
+  "resolving",
+  "complete",
+  "failed",
+]);
+
+export const runStatsSchema = z.object({
+  entitiesA: z.number().int().nonnegative(),
+  entitiesB: z.number().int().nonnegative(),
+  candidatePairs: z.number().int().nonnegative(),
+  matches: z.number().int().nonnegative(),
+  conflicts: z.number().int().nonnegative(),
+  autoResolved: z.number().int().nonnegative(),
+  escalated: z.number().int().nonnegative(),
+  tokensUsed: z.number().int().nonnegative(),
+});
+
+export const createRunSchema = z.object({
+  /** The CRM side. */
+  sourceAId: z.string().uuid(),
+  /** The warehouse side. */
+  sourceBId: z.string().uuid(),
+  rulesetId: z.string().uuid(),
+});
+
+export const runSchema = createRunSchema.extend({
+  id: z.string().uuid(),
+  status: runStatusSchema,
+  stats: runStatsSchema,
+  error: z.string().nullable(),
+  startedAt: z.coerce.date(),
+  finishedAt: z.coerce.date().nullable(),
+});
+
+/**
+ * POST {ENGINE_URL}/runs — the engine reads sources and ruleset from Postgres
+ * using runId. Configuration is never passed over the wire: two sources of
+ * truth for what a run executed would break reproducibility.
+ */
+export const engineStartRunRequestSchema = z.object({ runId: z.string().uuid() });
+export const engineStartRunResponseSchema = z.object({
+  runId: z.string().uuid(),
+  accepted: z.literal(true),
+});
+
+/** GET {ENGINE_URL}/runs/:runId/status */
+export const engineRunStatusSchema = z.object({
+  runId: z.string().uuid(),
+  status: runStatusSchema,
+  stats: runStatsSchema,
+  error: z.string().nullable(),
+});
+
+export type RunStatus = z.infer<typeof runStatusSchema>;
+export type RunStats = z.infer<typeof runStatsSchema>;
+export type CreateRun = z.infer<typeof createRunSchema>;
+export type Run = z.infer<typeof runSchema>;
+export type EngineRunStatus = z.infer<typeof engineRunStatusSchema>;
+
+
+--- types/source.ts ---
+import { z } from "zod";
+
+/** Mirrors engine/pipeline/schema.py. Change both in the same commit. */
+export const sourceKindSchema = z.enum([
+  "salesforce",
+  "hubspot",
+  "databricks",
+  "snowflake",
+  "synthetic",
+]);
+
+/** Non-secret shape only. Credentials live in the engine env, keyed by kind. */
+export const sourceConfigSchema = z.object({
+  objects: z.array(z.string()).min(1),
+  filter: z.string().optional(),
+});
+
+export const createSourceSchema = z.object({
+  name: z.string().min(1).max(80),
+  kind: sourceKindSchema,
+  config: sourceConfigSchema,
+});
+
+export const sourceSchema = createSourceSchema.extend({
+  id: z.string().uuid(),
+  createdAt: z.coerce.date(),
+});
+
+/** A parsed Zod schema is the type — no hand-maintained duplicate. */
+export type SourceKind = z.infer<typeof sourceKindSchema>;
+export type SourceConfig = z.infer<typeof sourceConfigSchema>;
+export type CreateSource = z.infer<typeof createSourceSchema>;
+export type Source = z.infer<typeof sourceSchema>;
+
+export const SOURCE_KIND_LABEL: Record<SourceKind, string> = {
+  salesforce: "Salesforce",
+  hubspot: "HubSpot",
+  databricks: "Databricks",
+  snowflake: "Snowflake",
+  synthetic: "Synthetic",
+};
+
+/** Which half of the reconciliation a kind can serve. */
+export const SOURCE_KIND_SIDE: Record<SourceKind, "crm" | "warehouse" | "either"> = {
+  salesforce: "crm",
+  hubspot: "crm",
+  databricks: "warehouse",
+  snowflake: "warehouse",
+  synthetic: "either",
+};
+
+
+--- .env ---
+# Canon — web layer environment.
+# Copy to web/.env. Server-side only.
+#
+# AGENTS.md § Security Rules: no secret is ever prefixed NEXT_PUBLIC_. There is
+# no legitimate reason to expose anything to the browser beyond the app's own
+# API routes.
+
+# Runtime — Supavisor TRANSACTION mode (port 6543). No prepared statements,
+# which is why lib/db passes `prepare: false`. Read by Server Components and
+# route handlers only.
+DATABASE_URL=postgresql://postgres.yenteczevefirhvgyvcu:ArlecchinoxZhongli@aws-0-ap-south-1.pooler.supabase.com:6543/postgres
+
+# Migrations — Supavisor SESSION mode (port 5432). Same host, same credential,
+# different port. drizzle-kit runs DDL and introspection with prepared
+# statements, which transaction mode does not support; Supabase's own guidance
+# is to migrate over a session or direct connection.
+MIGRATION_DATABASE_URL=postgresql://postgres.yenteczevefirhvgyvcu:ArlecchinoxZhongli@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
+
+# Where the reconciliation engine listens. Not public: the browser never calls
+# the engine directly, only this app's own /api routes do.
+ENGINE_URL=http://localhost:8000
+
+# NOTE — ANTHROPIC_API_KEY, SALESFORCE_*, DATABRICKS_TOKEN and SNOWFLAKE_PASSWORD
+# belong in engine/.env and must never appear here. All model calls happen
+# inside the engine.
+
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_cHJlY2lvdXMtcG9sZWNhdC0yOC5jbGVyay5hY2NvdW50cy5kZXYk
+CLERK_SECRET_KEY=sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf
+
+--- .env.example ---
+# Canon — web layer environment.
+# Copy to web/.env. Server-side only.
+#
+# AGENTS.md § Security Rules: no secret is ever prefixed NEXT_PUBLIC_. There is
+# no legitimate reason to expose anything to the browser beyond the app's own
+# API routes.
+
+# Runtime — Supavisor TRANSACTION mode, port 6543. Prepared statements are not
+# supported in this mode, which is why lib/db passes `prepare: false`.
+# Read by Server Components and route handlers only.
+DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+
+# Migrations — Supavisor SESSION mode, port 5432. Same host and credential as
+# above, different port. drizzle-kit needs prepared statements; transaction mode
+# cannot serve them. (A direct connection, db.[ref].supabase.co:5432, also works
+# but is IPv6-only without the IPv4 add-on.)
+MIGRATION_DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
+
+# NOTE — Canon does NOT use a Supabase API key. It talks to Postgres directly
+# over the connection strings above, which bypasses PostgREST and the API-key
+# system entirely, so database credentials are the only auth involved. Add a
+# secret key (Dashboard → Settings → API Keys) only if something starts using
+# supabase-js, Storage, Realtime or Supabase Auth. Note the legacy
+# `service_role` JWT is being retired at the end of 2026 in favour of
+# `sb_secret_...` keys.
+
+# Where the reconciliation engine listens. Not public: the browser never calls
+# the engine directly, only this app's own /api routes do.
+ENGINE_URL=http://localhost:8000
+
+# NOTE — ANTHROPIC_API_KEY, SALESFORCE_*, DATABRICKS_TOKEN and SNOWFLAKE_PASSWORD
+# belong in engine/.env and must never appear here. All model calls happen
+# inside the engine.
+
+
+--- package.json ---
+{
+  "name": "canon",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^7.6.5",
+    "@phosphor-icons/react": "^2.1.10",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.112.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.2",
+    "motion": "^12.43.0",
+    "next": "16.3.0",
+    "postgres": "^3.4.9",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
+
+
+## Instructions
+
+Analyze the above codebase context and provide your response following the format specified in the task.

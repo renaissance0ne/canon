@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-08-05T09:07:12.265Z",
+  "mode": "headless",
+  "workerType": "audit",
+  "model": "haiku",
+  "durationMs": 48458,
+  "executionId": "audit_1785920783807_moxg3z",
+  "success": true,
+  "findings": {
+    "vulnerabilities": [
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": -1,
+        "description": "Real Supabase database credentials exposed in .env file. Credentials include live PostgreSQL connection strings with plaintext passwords and Clerk secret key. This file must never be committed to version control."
+      },
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": -1,
+        "description": "Clerk secret key (sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf) is hardcoded in .env. Secret keys must be stored in secret management systems and never in code or .env files."
+      },
+      {
+        "severity": "high",
+        "file": "proxy.ts",
+        "line": 1,
+        "description": "Route protection relies entirely on proxy.ts matcher configuration without database-level access control. If the matcher regex is misconfigured or bypassed, unprotected routes may be accessible. Table ownership is enforced by policy alone, not database constraints."
+      },
+      {
+        "severity": "high",
+        "file": "lib/db/schema.ts",
+        "line": -1,
+        "description": "Table ownership (sources, rulesets web-only; entities, matches, conflicts engine-only) is enforced by code discipline and policy rather than database-level permissions. A compromised application could write to engine-owned tables."
+      },
+      {
+        "severity": "medium",
+        "file": "types/source.ts",
+        "line": 15,
+        "description": "The 'filter' field in sourceConfig is optional and accepted as a string. If this filter is passed to the engine without proper validation/sanitization, it could be vulnerable to SQL injection depending on how the engine processes it."
+      },
+      {
+        "severity": "medium",
+        "file": "types/resolution.ts",
+        "line": 17,
+        "description": "The 'rationale' field is agent-authored plain-English text. Without explicit HTML escaping verification, rendering this field could be vulnerable to XSS if React's auto-escaping is bypassed or if rendered outside React components."
+      },
+      {
+        "severity": "low",
+        "file": ".env",
+        "line": -1,
+        "description": "DATABASE_URL and MIGRATION_DATABASE_URL use the same credentials, creating a single point of compromise. While necessary for the pooler setup, consider rotating these credentials regularly."
+      }
+    ],
+    "riskScore": 78,
+    "recommendations": [
+      "IMMEDIATE: Rotate all compromised credentials (Supabase PostgreSQL passwords and Clerk secret key). The exposed credentials in .env must be treated as breached.",
+      "Add .env and .env.local to .gitignore to prevent accidental credential commits. Verify these files are not in git history.",
+      "Implement database-level access control: create separate Postgres roles for the application and engine with explicit permissions on assigned tables only.",
+      "Replace proxy.ts middleware with a more robust authorization system: consider a centralized middleware that validates both route and operation permissions.",
+      "Sanitize and validate the 'filter' field in source configs before passing to the engine. Document the expected format and restrictions.",
+      "Audit all locations where 'rationale' field is rendered to confirm React's auto-escaping is applied and no dangerouslySetInnerHTML is used.",
+      "Implement structured logging for authentication/authorization failures to detect attack attempts.",
+      "Add CSRF protection to state-changing endpoints (PATCH /api/conflicts/:conflictId/resolution).",
+      "Set up secrets scanning in CI/CD to prevent future credential commits.",
+      "Regularly rotate Supabase and Clerk credentials (quarterly minimum)."
+    ]
+  },
+  "rawOutputPreview": "Based on my analysis of the provided codebase context, here's the security vulnerability report:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": -1,\n      \"description\": \"Real Supabase database credentials exposed in .env file. Credentials include live PostgreSQL connection strings with plaintext passwords and Clerk secret key. This file must never be committed to version control.\"\n    },\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": -1,\n      \"description\": \"Clerk secret key (sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf) is hardcoded in .env. Secret keys must be stored in secret management systems and never in code or .env files.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"proxy.ts\",\n      \"line\": 1,\n      \"description\": \"Route protection relies entirely on proxy.ts matcher configuration without database-level access control. If the matcher regex is misconfigured or bypassed, unprotected routes may be accessible. Table ownership is enforced by policy alone, not database constraints.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"lib/db/schema.ts\",\n      \"line\": -1,\n      \"description\": \"Table ownership (sources, rulesets web-only; entities, matches, conflicts engine-only) is enforced by code discipline and policy rather than database-level permissions. A compromised application could write to engine-owned tables.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"types/source.ts\",\n      \"line\": 15,\n      \"description\": \"The 'filter' field in sourceConfig is optional and accepted as a string. If this filter is passed to the engine without proper validation/sanitization, it could be vulnerable to SQL injection depending on how the engine processes it.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"types/resolution.ts\",\n      \"line\": 17,\n      \"description\": \"The 'rationale' field is agent-authored plain-English text. Without explicit HTML escap",
+  "rawOutputLength": 4267
+}

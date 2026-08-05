@@ -1,0 +1,35 @@
+[2026-08-05T04:11:05.272Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Looking at the codebase context provided, I need to note that this appears to be mostly **template/configuration files and schema definitions** rather than the full application code. Here's my security analysis:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 10,\n      \"description\": \"Non-null assertion (!) on DATABASE_URL without graceful fallback. While environment variables are the correct approach, the non-null assertion could throw an unhelpful error at runtime. Better to validate explicitly.\"\n    }\n  ],\n  \"riskScore\": 15,\n  \"recommendations\": [\n    \"✅ GOOD: Secrets (API keys, database URLs) are correctly stored in environment variables only, never in code or config files\",\n    \"✅ GOOD: `server-only` guard is used on database modules to prevent server code from leaking to client bundles\",\n    \"✅ GOOD: Drizzle ORM provides parameterized queries by default — no raw SQL visible means SQL injection risk is minimal\",\n    \"✅ GOOD: Clear documentation in AGENTS.md defines where each credential belongs (engine .env only, never web/)\",\n    \"✅ GOOD: TypeScript strict mode and Zod validation mentioned for route handlers should catch many classes of bugs\",\n    \"⚠️  VERIFY: Ensure all route handlers validate input with Zod before querying the database (mentioned in AGENTS.md but not visible in provided code)\",\n    \"⚠️  VERIFY: Confirm that `sources.config` jsonb column never receives credentials in practice — enforce via code review\",\n    \"⚠️  VERIFY: No authentication layer exists in v1 (noted as intentional). Before production use, add auth (e.g., Clerk or similar)\",\n    \"⚠️  VERIFY: Check that the `.env` and `.env.local` files (not shown) do not contain any secrets committed to git — add to .gitignore if not already\",\n    \"📝 Refactor: Replace `process.env.DATABASE_URL!` in drizzle.config.ts with explicit error handling instead of non-null assertion\"\n  ]\n}\n```\n\n**Key Findings:**\n\nThis codebase follows **strong security practices** overall:\n- Secrets are correctly externalized to environment variables\n- Use of ORM prevents SQL injection\n- Server-only module guards prevent credential leaks to browser\n- Clear architectural separation between layers\n\n**Limited visibility caveat:** The provided context is mostly templates and configuration—the actual API route handlers (where validation happens) and `.env` files aren't shown. A complete review would need to examine:\n1. All route handlers in `web/app/api/` to verify Zod validation\n2. The `.env` files to confirm no secrets are committed\n3. Engine code in `engine/` to verify no secrets cross the HTTP boundary\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "low",
+        "file": "web/drizzle.config.ts",
+        "line": 10,
+        "description": "Non-null assertion (!) on DATABASE_URL without graceful fallback. While environment variables are the correct approach, the non-null assertion could throw an unhelpful error at runtime. Better to validate explicitly."
+      }
+    ],
+    "riskScore": 15,
+    "recommendations": [
+      "✅ GOOD: Secrets (API keys, database URLs) are correctly stored in environment variables only, never in code or config files",
+      "✅ GOOD: `server-only` guard is used on database modules to prevent server code from leaking to client bundles",
+      "✅ GOOD: Drizzle ORM provides parameterized queries by default — no raw SQL visible means SQL injection risk is minimal",
+      "✅ GOOD: Clear documentation in AGENTS.md defines where each credential belongs (engine .env only, never web/)",
+      "✅ GOOD: TypeScript strict mode and Zod validation mentioned for route handlers should catch many classes of bugs",
+      "⚠️  VERIFY: Ensure all route handlers validate input with Zod before querying the database (mentioned in AGENTS.md but not visible in provided code)",
+      "⚠️  VERIFY: Confirm that `sources.config` jsonb column never receives credentials in practice — enforce via code review",
+      "⚠️  VERIFY: No authentication layer exists in v1 (noted as intentional). Before production use, add auth (e.g., Clerk or similar)",
+      "⚠️  VERIFY: Check that the `.env` and `.env.local` files (not shown) do not contain any secrets committed to git — add to .gitignore if not already",
+      "📝 Refactor: Replace `process.env.DATABASE_URL!` in drizzle.config.ts with explicit error handling instead of non-null assertion"
+    ]
+  },
+  "durationMs": 31163,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T04:11:05.272Z",
+  "executionId": "audit_1785903034109_jboqmd"
+}

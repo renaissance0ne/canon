@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet"><style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:#fafafa;font-family:"IBM Plex Sans",system-ui,sans-serif;color:#18181b}
+a{color:#18181b;text-decoration-color:#a1a1aa}a:hover{text-decoration-color:#18181b}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important}}
+.pv{padding:36px 40px;border-bottom:1px solid #e4e4e7}
+.pv-h{display:flex;align-items:baseline;gap:10px;margin:0 0 6px}
+.pv-id{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#18181b;color:#fff;border-radius:2px;text-decoration:none}
+.pv-t{font:500 13px/1.2 "IBM Plex Sans",sans-serif}
+.pv-s{font:400 11.5px/1.5 "IBM Plex Sans",sans-serif;color:#71717a;margin:0 0 16px;max-width:620px}
+.grid-field{background-color:#fafafa;background-image:linear-gradient(to right,#d4d4d8 1px,transparent 1px),linear-gradient(to bottom,#d4d4d8 1px,transparent 1px);background-size:40px 40px;background-position:-1px -1px}
+.glass{background-color:rgba(255,255,255,.66);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(24,24,27,.09)}
+.glass-strong{background-color:rgba(255,255,255,.76);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(24,24,27,.12)}
+.glass-veil{background-color:rgba(255,255,255,.62);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.r2{border-radius:2px}
+.disp{font:500 28px/32px "IBM Plex Sans",sans-serif;letter-spacing:-.02em;margin:0;text-wrap:pretty}
+.head{font:500 17px/24px "IBM Plex Sans",sans-serif;letter-spacing:-.01em;margin:0;text-wrap:pretty}
+.body{font:400 14px/20px "IBM Plex Sans",sans-serif;color:#52525b;margin:0;text-wrap:pretty}
+.lab{font:500 11px/16px "IBM Plex Sans",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#71717a;margin:0}
+.val{font:400 13px/20px "IBM Plex Mono",monospace;margin:0}
+.btn{display:inline-flex;align-items:center;height:44px;padding:0 20px;border-radius:2px;font:500 13px/1 "IBM Plex Sans",sans-serif;border:1px solid #18181b;background:#fff;color:#18181b;text-decoration:none;transition:background-color 80ms cubic-bezier(.2,0,.2,1),border-color 80ms}
+.btn-p{background:#18181b;color:#fff}
+.btn-p:hover{background:#27272a}
+.btn:hover{background:#f4f4f5}
+.btn-sm{height:32px;padding:0 10px;font-size:11px;letter-spacing:.02em}
+.navi{display:flex;align-items:center;height:32px;padding-left:12px;margin-left:-12px;border-left:2px solid transparent;font:500 11px/16px "IBM Plex Sans",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#71717a;text-decoration:none;transition:color 80ms}
+.navi:hover{color:#18181b}
+.navi-on{border-left-color:#18181b;font-weight:600;color:#18181b}
+</style></helmet>
+
+<section class="pv" id="t3">
+<div class="pv-h"><a class="pv-id" href="#t3">3</a><span class="pv-t">Landing page + sign-up</span></div>
+<p class="pv-s">Marketing layer on the same tokens: glass for floating chrome, opaque and square for every data surface. The hero's proof is the product's own atom — a real conflict diff row with the 1px spine, character-level emphasis on the differing tail, and the proposal indented beneath it. Sign-up is form-only; no auth layer is wired.</p>
+
+<div style="display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start">
+
+<div id="3a" style="display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;align-items:baseline;gap:8px"><a class="pv-id" href="#3a" style="background:rgba(0,0,0,.08);color:#18181b">3a</a><span style="font:400 11px/1.3 'IBM Plex Sans',sans-serif;color:#71717a">/ · <span style="font-family:'IBM Plex Mono',monospace">app/page.tsx</span></span></div>
+<div class="grid-field" style="width:1120px;box-shadow:0 0 0 1px #e4e4e7" data-screen-label="Landing">
+
+<div class="glass-veil" style="position:sticky;top:0;z-index:20;border-bottom:1px solid #e4e4e7">
+<div style="max-width:1120px;margin:0 auto;padding:0 32px;height:64px;display:flex;align-items:center;gap:32px">
+<a href="#3a" style="text-decoration:none;display:flex;align-items:center;gap:10px;color:#18181b"><svg width="18" height="18" viewBox="0 0 64 64" style="display:block"><path d="M46.4 23A17 17 0 1 0 46.4 41" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"></path><circle cx="56" cy="32" r="6.5" fill="currentColor"></circle></svg><span style="font:600 13px/1 'IBM Plex Sans',sans-serif;letter-spacing:.16em;text-transform:uppercase">Canon</span></a>
+<div style="display:flex;align-items:center;gap:24px">
+<a class="lab" style="text-decoration:none" href="#3a">How it works</a>
+<a class="lab" style="text-decoration:none" href="#3a">Severity</a>
+<a class="lab" style="text-decoration:none" href="#3a">Audit</a>
+</div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+<a class="btn btn-sm" style="border-color:transparent;background:transparent;color:#52525b" href="#3b">Sign up</a>
+<a class="btn btn-p btn-sm" href="#2a">Get started</a>
+</div>
+</div>
+</div>
+
+<div style="max-width:1120px;margin:0 auto;padding:80px 32px 96px">
+<div class="glass-strong r2" style="padding:48px 40px;animation:rise 120ms cubic-bezier(.2,0,.2,1) both">
+<p class="lab">Reconciliation for organizational structure</p>
+<h1 style="margin:24px 0 0;max-width:720px;font:500 44px/1.05 'IBM Plex Sans',sans-serif;letter-spacing:-.03em;text-wrap:pretty">Your org chart exists twice, and the two copies disagree.</h1>
+<p class="body" style="margin-top:20px;max-width:600px">Reps and ops teams edit accounts, roles, territories and reporting lines in the CRM. The warehouse holds its own version of the same structure. Canon reads both, finds every disagreement, proposes a resolution with its reasoning attached, and escalates the ones a human should decide.</p>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:36px">
+<a class="btn btn-p" href="#2a">Get started</a>
+<a class="btn" href="#3b">Sign up</a>
+<p class="val" style="color:#71717a">or run the synthetic dataset · seed 42</p>
+</div>
+</div>
+
+<div style="margin-top:40px;animation:rise 120ms cubic-bezier(.2,0,.2,1) 80ms both">
+<p class="lab" style="margin-bottom:12px">One conflict, as Canon renders it</p>
+<div style="border:1px solid #d4d4d8;background:#fff">
+<div style="display:flex;align-items:center;gap:20px;border-bottom:1px solid #e4e4e7;padding:12px 16px">
+<span style="display:inline-flex;align-items:center;gap:8px"><span style="padding:2px 4px;border:1px solid #18181b;font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.06em">███░</span><span class="lab" style="color:#18181b">Attribute</span></span>
+<span class="val" style="color:#52525b">territory</span>
+<span class="val" style="margin-left:auto;color:#71717a">ACC-4417 · Northwind Traders</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr">
+<div style="padding:12px 16px;border-right:1px solid #e4e4e7">
+<p class="lab">Salesforce (prod)</p>
+<p class="val" style="margin-top:4px"><span style="color:#71717a">APAC</span><span style="font-weight:500;color:#18181b">-SOUTH</span></p>
+<p class="body" style="margin-top:2px;color:#71717a">modified 2d ago</p>
+</div>
+<div style="padding:12px 16px">
+<p class="lab">Databricks GTM</p>
+<p class="val" style="margin-top:4px;color:#71717a">APAC</p>
+<p class="body" style="margin-top:2px;color:#71717a">modified 61d ago</p>
+</div>
+</div>
+<div style="border-top:1px solid #e4e4e7;background:#fafafa;padding:12px 16px">
+<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:20px">
+<p class="val"><span style="color:#71717a">→ </span><span style="font-weight:500">APAC-SOUTH</span></p>
+<p class="val" style="color:#71717a">most_recent · 0.91</p>
+<p class="val" style="margin-left:auto;color:#71717a">● auto-applied</p>
+</div>
+<p class="body" style="margin-top:6px;max-width:560px">Salesforce shows APAC-SOUTH, modified 2 days ago; the warehouse still shows APAC from 61 days ago. Applied most_recent.</p>
+</div>
+</div>
+</div>
+</div>
+
+<div style="max-width:1120px;margin:0 auto;padding:0 32px 80px">
+<p class="lab">How it works</p>
+<h2 class="disp" style="margin-top:12px;max-width:640px">Six stages, and the model only runs in one of them.</h2>
+<p class="body" style="margin-top:12px;max-width:600px">Deterministic rules resolve what they can. The agent is asked only about the conflicts rules leave open, and its answer is checked against what the sources actually reported before anything is applied.</p>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e4e4e7;margin-top:40px">
+<div class="glass" style="border:0;padding:24px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="val" style="color:#71717a">01</span><span style="font:400 11px/1 'IBM Plex Mono',monospace;color:#71717a">connectors</span></div><h3 class="head" style="margin-top:6px">Extract</h3><p class="body" style="margin-top:6px">CRM and warehouse reads, side by side.</p></div>
+<div class="glass" style="border:0;padding:24px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="val" style="color:#71717a">02</span><span style="font:400 11px/1 'IBM Plex Mono',monospace;color:#71717a">CanonicalEntity</span></div><h3 class="head" style="margin-top:6px">Normalize</h3><p class="body" style="margin-top:6px">Folding is recorded, never destructive.</p></div>
+<div class="glass" style="border:0;padding:24px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="val" style="color:#71717a">03</span><span style="font:400 11px/1 'IBM Plex Mono',monospace;color:#71717a">exact → FAISS top-k</span></div><h3 class="head" style="margin-top:6px">Match</h3><p class="body" style="margin-top:6px">Blocked to O(n·k). Never all pairs.</p></div>
+<div class="glass" style="border:0;padding:24px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="val" style="color:#71717a">04</span><span style="font:400 11px/1 'IBM Plex Mono',monospace;color:#71717a">severity 1–4</span></div><h3 class="head" style="margin-top:6px">Detect</h3><p class="body" style="margin-top:6px">Field diffs, orphans and duplicates.</p></div>
+<div class="glass" style="border:0;padding:24px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="val" style="color:#71717a">05</span><span style="font:400 11px/1 'IBM Plex Mono',monospace;color:#71717a">rules → agent</span></div><h3 class="head" style="margin-top:6px">Resolve</h3><p class="body" style="margin-top:6px">The model is called only when rules do not decide.</p></div>
+<div class="glass" style="border:0;padding:24px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="val" style="color:#71717a">06</span><span style="font:400 11px/1 'IBM Plex Mono',monospace;color:#71717a">observed values only</span></div><h3 class="head" style="margin-top:6px">Validate</h3><p class="body" style="margin-top:6px">A value neither source reported is rejected.</p></div>
+</div>
+<div class="glass r2" style="border:0;margin-top:1px;padding:20px 24px;display:flex;flex-wrap:wrap;align-items:baseline;gap:24px">
+<p class="lab">Auto-apply gate</p>
+<p class="val">confidence ≥ 0.85 AND severity ≤ 2</p>
+<p class="body" style="max-width:520px">Everything else escalates to a person. The threshold is a named constant the evaluation harness sweeps — not a setting buried in the console.</p>
+</div>
+</div>
+
+<div style="max-width:1120px;margin:0 auto;padding:0 32px 80px">
+<p class="lab">Severity without color</p>
+<h2 class="disp" style="margin-top:12px;max-width:640px">Four levels, carried by density and a word.</h2>
+<p class="body" style="margin-top:12px;max-width:600px">The console is entirely achromatic. Color is the lazy way to encode state, and removing it forces every distinction onto something more durable: fill density, weight, shape, and always a label. A mark never appears without its word.</p>
+<table style="width:100%;border-collapse:collapse;background:#fff;margin-top:40px">
+<thead><tr style="text-align:left;border-bottom:1px solid #d4d4d8">
+<th class="lab" style="padding:0 24px 8px 0;font-weight:500">Severity</th><th class="lab" style="padding:0 24px 8px 0;font-weight:500">What lands here</th><th class="lab" style="padding:0 0 8px;font-weight:500">Policy</th>
+</tr></thead>
+<tbody>
+<tr style="border-bottom:1px solid #e4e4e7;vertical-align:top"><td style="padding:12px 24px 12px 0;white-space:nowrap"><span style="display:inline-flex;align-items:center;gap:8px"><span style="padding:2px 4px;background:#09090b;color:#fff;font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.06em">████</span><span class="lab" style="color:#18181b">Structural</span></span></td><td class="body" style="padding:12px 24px 12px 0;color:#18181b">Hierarchy edges, orphans with children, duplicates</td><td class="body" style="padding:12px 0">Always escalated. Re-parenting changes what rollups mean.</td></tr>
+<tr style="border-bottom:1px solid #e4e4e7;vertical-align:top"><td style="padding:12px 24px 12px 0;white-space:nowrap"><span style="display:inline-flex;align-items:center;gap:8px"><span style="padding:2px 4px;border:1px solid #18181b;font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.06em">███░</span><span class="lab" style="color:#18181b">Attribute</span></span></td><td class="body" style="padding:12px 24px 12px 0;color:#18181b">Fields that drive routing — territory, role, owner</td><td class="body" style="padding:12px 0">Escalated. A rule may propose, a human decides.</td></tr>
+<tr style="border-bottom:1px solid #e4e4e7;vertical-align:top"><td style="padding:12px 24px 12px 0;white-space:nowrap"><span style="display:inline-flex;align-items:center;gap:8px"><span style="padding:2px 4px;border:1px solid #d4d4d8;color:#3f3f46;font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.06em">██░░</span><span class="lab" style="color:#18181b">Attribute</span></span></td><td class="body" style="padding:12px 24px 12px 0;color:#18181b">Descriptive fields — segment, industry, region label</td><td class="body" style="padding:12px 0">Auto-applied at confidence ≥ 0.85.</td></tr>
+<tr style="border-bottom:1px solid #e4e4e7;vertical-align:top"><td style="padding:12px 24px 12px 0;white-space:nowrap"><span style="display:inline-flex;align-items:center;gap:8px"><span style="padding:2px 4px;color:#71717a;font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.06em">█░░░</span><span class="lab" style="color:#18181b">Cosmetic</span></span></td><td class="body" style="padding:12px 24px 12px 0;color:#18181b">Case, punctuation, legal suffix</td><td class="body" style="padding:12px 0">Auto-applied. Normalization already agrees.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div style="max-width:1120px;margin:0 auto;padding:0 32px 80px">
+<p class="lab">Boundaries</p>
+<h2 class="disp" style="margin-top:12px;max-width:640px">What Canon deliberately will not do.</h2>
+<p class="body" style="margin-top:12px;max-width:600px">The scope is narrow on purpose. Each of these is a decision, not a missing feature.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e4e4e7;margin-top:40px">
+<div class="glass" style="border:0;padding:24px"><h3 class="head">It does not write back</h3><p class="body" style="margin-top:8px">Canon never edits Salesforce or the warehouse. It proposes, records, and hands you a file. Write-back changes the risk profile of the whole system.</p></div>
+<div class="glass" style="border:0;padding:24px"><h3 class="head">It does not merge duplicates</h3><p class="body" style="margin-top:8px">Two CRM records matching one warehouse record is reported, with the evidence. Merging is a source-system decision.</p></div>
+<div class="glass" style="border:0;padding:24px"><h3 class="head">It does not invent values</h3><p class="body" style="margin-top:8px">The validate step rejects any resolution neither source actually reported — including the model's.</p></div>
+<div class="glass" style="border:0;padding:24px"><h3 class="head">It does not edit history</h3><p class="body" style="margin-top:8px">Rulesets are versioned rather than edited, and the audit log is append-only, so a run from six weeks ago still reproduces.</p></div>
+</div>
+</div>
+
+<div style="max-width:1120px;margin:0 auto;padding:0 32px 96px">
+<div class="glass-strong r2" style="padding:40px;display:flex;flex-wrap:wrap;align-items:center;gap:24px">
+<div>
+<h2 class="disp" style="max-width:480px">Reconcile your first two sources.</h2>
+<p class="body" style="margin-top:8px;max-width:440px">Or run the synthetic dataset and watch the whole pipeline work before you touch a credential.</p>
+</div>
+<div style="margin-left:auto;display:flex;flex-wrap:wrap;gap:12px">
+<a class="btn btn-p" href="#2a">Get started</a>
+<a class="btn" href="#3b">Sign up</a>
+</div>
+</div>
+</div>
+
+<div style="border-top:1px solid #e4e4e7">
+<div style="max-width:1120px;margin:0 auto;padding:32px;display:flex;flex-wrap:wrap;align-items:center;gap:24px">
+<span style="display:flex;align-items:center;gap:9px;color:#18181b"><svg width="16" height="16" viewBox="0 0 64 64" style="display:block"><path d="M46.4 23A17 17 0 1 0 46.4 41" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"></path><circle cx="56" cy="32" r="6.5" fill="currentColor"></circle></svg><span style="font:600 11.5px/1 'IBM Plex Sans',sans-serif;letter-spacing:.16em;text-transform:uppercase">Canon</span></span>
+<p class="val" style="color:#71717a">single-tenant · no write-back</p>
+<a class="lab" style="margin-left:auto;text-decoration:none" href="#2a">Get started</a>
+</div>
+</div>
+
+</div>
+</div>
+
+<div id="3b" style="display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;align-items:baseline;gap:8px"><a class="pv-id" href="#3b" style="background:rgba(0,0,0,.08);color:#18181b">3b</a><span style="font:400 11px/1.3 'IBM Plex Sans',sans-serif;color:#71717a">/sign-up · <span style="font-family:'IBM Plex Mono',monospace">app/sign-up/page.tsx</span></span></div>
+<div class="grid-field" style="width:600px;box-shadow:0 0 0 1px #e4e4e7" data-screen-label="Sign up">
+<div style="padding:32px">
+<a href="#3a" style="text-decoration:none;display:flex;align-items:center;gap:10px;color:#18181b;width:max-content"><svg width="18" height="18" viewBox="0 0 64 64" style="display:block"><path d="M46.4 23A17 17 0 1 0 46.4 41" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"></path><circle cx="56" cy="32" r="6.5" fill="currentColor"></circle></svg><span style="font:600 13px/1 'IBM Plex Sans',sans-serif;letter-spacing:.16em;text-transform:uppercase">Canon</span></a>
+</div>
+<div style="padding:0 40px 64px">
+<div class="glass-strong r2" style="padding:36px;animation:rise 120ms cubic-bezier(.2,0,.2,1) both">
+<p class="lab">Sign up</p>
+<h1 class="disp" style="margin-top:16px">Request a workspace.</h1>
+<p class="body" style="margin-top:8px">Canon runs single-tenant, one workspace per organization. Tell us which two systems you need reconciled and we will provision it.</p>
+<div style="display:flex;flex-direction:column;gap:20px;margin-top:32px">
+<div style="display:flex;flex-direction:column;gap:6px"><p class="lab">Work email</p><div style="height:36px;display:flex;align-items:center;padding:0 10px;border:1px solid #d4d4d8;border-radius:2px;background:#fff;font:400 13px/1 'IBM Plex Mono',monospace;color:#a1a1aa">you@company.com</div></div>
+<div style="display:flex;flex-direction:column;gap:6px"><p class="lab">Organization</p><div style="height:36px;display:flex;align-items:center;padding:0 10px;border:1px solid #d4d4d8;border-radius:2px;background:#fff;font:400 13px/1 'IBM Plex Mono',monospace;color:#a1a1aa">Northwind Traders</div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+<div style="display:flex;flex-direction:column;gap:6px"><p class="lab">CRM side</p><div style="height:36px;display:flex;align-items:center;padding:0 10px;border:1px solid #d4d4d8;border-radius:2px;background:#fff;font:400 13px/1 'IBM Plex Mono',monospace;color:#a1a1aa">salesforce</div></div>
+<div style="display:flex;flex-direction:column;gap:6px"><p class="lab">Warehouse side</p><div style="height:36px;display:flex;align-items:center;padding:0 10px;border:1px solid #d4d4d8;border-radius:2px;background:#fff;font:400 13px/1 'IBM Plex Mono',monospace;color:#a1a1aa">databricks</div></div>
+</div>
+<a class="btn btn-p" style="width:max-content" href="#2a">Request workspace</a>
+</div>
+<p class="body" style="margin-top:28px;border-top:1px solid #e4e4e7;padding-top:20px">Want to see it work first? <a href="#2a">Run the synthetic dataset</a> — no credentials, seed 42, full pipeline.</p>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+</section>
+
+<section class="pv" id="t2">
+<div class="pv-h"><a class="pv-id" href="#t2">2</a><span class="pv-t">Rendered from the TSX — /get-started and /sources</span></div>
+<p class="pv-s">Faithful preview of the components in <span style="font-family:'IBM Plex Mono',monospace">web/</span>: same grayscale tokens, IBM Plex pairing, 240px rail, 2px radius on interactive elements only. Glass is confined to floating chrome — the rail veil, the sticky header, the two onboarding panels — and blurs against a 40px hairline grid, so it never introduces a hue or a gradient. Data surfaces stay opaque and square.</p>
+
+<div style="display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start">
+
+<div id="2a" style="display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;align-items:baseline;gap:8px"><a class="pv-id" href="#2a" style="background:rgba(0,0,0,.08);color:#18181b">2a</a><span style="font:400 11px/1.3 'IBM Plex Sans',sans-serif;color:#71717a">/get-started · <span style="font-family:'IBM Plex Mono',monospace">app/get-started/page.tsx</span></span></div>
+<div class="grid-field" style="width:960px;box-shadow:0 0 0 1px #e4e4e7" data-screen-label="Get started">
+<div style="max-width:880px;margin:0 auto;padding:64px 32px;display:flex;flex-direction:column;animation:rise 120ms cubic-bezier(.2,0,.2,1) both">
+
+<div class="glass-strong r2" style="padding:32px 36px">
+<div style="display:flex;align-items:center;gap:12px">
+<svg width="26" height="26" viewBox="0 0 64 64" style="display:block;color:#18181b"><path d="M46.4 23A17 17 0 1 0 46.4 41" fill="none" stroke="currentColor" stroke-width="7.5" stroke-linecap="round"></path><circle cx="56" cy="32" r="6" fill="currentColor"></circle></svg>
+<p class="lab">Get started</p>
+</div>
+<h1 class="disp" style="margin-top:24px;max-width:620px">Two systems of record, one answer.</h1>
+<p class="body" style="margin-top:12px;max-width:560px">Your CRM and your warehouse both claim to hold the org chart, and they disagree — on parents, territories, roles, and on which records are the same company. Canon finds the disagreements, proposes a resolution for each one, and escalates what a human should decide.</p>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:32px;border-top:1px solid #e4e4e7;padding-top:20px">
+<div><p class="lab">Matching</p><p class="val">exact → FAISS top-k</p></div>
+<div><p class="lab">Severity</p><p class="val">4 levels · labelled</p></div>
+<div><p class="lab">Audit</p><p class="val">append-only</p></div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e4e4e7;margin-top:48px">
+<div class="glass" style="border:0;padding:24px;display:flex;flex-direction:column;gap:8px;animation:rise 120ms cubic-bezier(.2,0,.2,1) 60ms both">
+<div style="display:flex;align-items:baseline;justify-content:space-between"><span class="val" style="color:#71717a">01</span><span style="font:400 11px/1 'IBM Plex Mono',monospace;color:#71717a">sources ×2</span></div>
+<h2 class="head">Configure two sources</h2>
+<p class="body">One CRM side, one warehouse side. Credentials live in the engine environment — this record holds the non-secret shape only.</p>
+</div>
+<div class="glass" style="border:0;padding:24px;display:flex;flex-direction:column;gap:8px;animation:rise 120ms cubic-bezier(.2,0,.2,1) 80ms both">
+<div style="display:flex;align-items:baseline;justify-content:space-between"><span class="val" style="color:#71717a">02</span><span style="font:400 11px/1 'IBM Plex Mono',monospace;color:#71717a">ruleset v1</span></div>
+<h2 class="head">Author a survivorship policy</h2>
+<p class="body">Field-level rules, evaluated most specific first. Rulesets are versioned rather than edited, so a past run stays reproducible.</p>
+</div>
+<div class="glass" style="border:0;padding:24px;display:flex;flex-direction:column;gap:8px;animation:rise 120ms cubic-bezier(.2,0,.2,1) 100ms both">
+<div style="display:flex;align-items:baseline;justify-content:space-between"><span class="val" style="color:#71717a">03</span><span style="font:400 11px/1 'IBM Plex Mono',monospace;color:#71717a">conf ≥ 0.85 ∧ sev ≤ 2</span></div>
+<h2 class="head">Run, then review what escalated</h2>
+<p class="body">Rules decide what they can. The agent proposes the rest, and anything at severity 3 or above reaches you with its rationale attached.</p>
+</div>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:48px;border-top:1px solid #e4e4e7;padding-top:32px">
+<a class="btn btn-p" href="#2b">Add your first source</a>
+<a class="btn" href="#2b">Use synthetic dataset</a>
+<a class="btn" style="border-color:#e4e4e7;color:#3f3f46" href="#3b">Sign up</a>
+<p class="val" style="color:#71717a">seed 42 · 512 entities</p>
+</div>
+<p class="body" style="margin-top:24px;max-width:560px;border-left:2px solid #18181b;padding-left:12px">Canon never writes back to Salesforce or the warehouse. It proposes, records every decision, and hands you a file.</p>
+
+</div>
+</div>
+</div>
+
+<div id="2b" style="display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;align-items:baseline;gap:8px"><a class="pv-id" href="#2b" style="background:rgba(0,0,0,.08);color:#18181b">2b</a><span style="font:400 11px/1.3 'IBM Plex Sans',sans-serif;color:#71717a">/sources · wireframe 1b · <span style="font-family:'IBM Plex Mono',monospace">(console)/sources/page.tsx</span></span></div>
+<div class="grid-field" style="width:960px;box-shadow:0 0 0 1px #e4e4e7" data-screen-label="Sources empty state">
+<div style="display:flex;min-height:560px">
+
+<div class="glass-veil" style="width:240px;flex:none;border-right:1px solid #e4e4e7;padding:24px 20px;display:flex;flex-direction:column">
+<a href="#2b" style="text-decoration:none;margin-bottom:40px;display:flex;align-items:center;gap:10px;color:#18181b">
+<svg width="18" height="18" viewBox="0 0 64 64" style="display:block"><path d="M46.4 23A17 17 0 1 0 46.4 41" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"></path><circle cx="56" cy="32" r="6.5" fill="currentColor"></circle></svg>
+<span style="font:600 13px/1 'IBM Plex Sans',sans-serif;letter-spacing:.16em;text-transform:uppercase">Canon</span>
+</a>
+<div style="display:flex;flex-direction:column;gap:2px">
+<a class="navi" href="#2b">Runs</a>
+<a class="navi" href="#2b">Conflicts</a>
+<a class="navi navi-on" href="#2b" aria-current="page">Sources</a>
+<a class="navi" href="#2b">Rules</a>
+<a class="navi" href="#2b">Audit</a>
+</div>
+<p style="margin-top:auto;font:400 11px/1.6 'IBM Plex Mono',monospace;color:#71717a">single-tenant<br>no write-back</p>
+</div>
+
+<div style="flex:1;min-width:0">
+<div class="glass-veil" style="display:flex;align-items:baseline;gap:16px;border-bottom:1px solid #e4e4e7;padding:20px 40px">
+<h1 class="head">Sources</h1>
+</div>
+<div style="padding:32px 40px">
+<div class="glass-strong r2" style="max-width:720px;padding:32px;animation:rise 120ms cubic-bezier(.2,0,.2,1) both">
+<p class="lab">No sources yet</p>
+<h2 class="head" style="margin-top:16px;max-width:520px">Canon reads two systems and reconciles them.</h2>
+<p class="body" style="margin-top:8px;max-width:520px">Configure one CRM side and one warehouse side to start. Credentials stay in the engine environment, keyed by kind — nothing secret is stored on a source record.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e4e4e7;border:1px dashed #d4d4d8;margin-top:28px">
+<div style="background:rgba(250,250,250,.6);padding:16px 20px"><p class="lab">Source A · CRM</p><p class="val" style="margin-top:4px;color:#71717a">salesforce · hubspot</p></div>
+<div style="background:rgba(250,250,250,.6);padding:16px 20px"><p class="lab">Source B · warehouse</p><p class="val" style="margin-top:4px;color:#71717a">databricks · snowflake</p></div>
+</div>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:28px">
+<a class="btn btn-p" style="height:36px;padding:0 14px" href="#2b">Add source</a>
+<a class="btn" style="height:36px;padding:0 14px" href="#2b">Use synthetic dataset</a>
+<p class="val" style="color:#71717a">seed 42</p>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+
+</div>
+</section>
+</x-dc>
+</body>
+</html>

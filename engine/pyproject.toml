@@ -1,0 +1,68 @@
+[project]
+name = "canon-engine"
+version = "0.1.0"
+description = "Canon reconciliation engine — connectors, pipeline, resolution agent, evaluation harness."
+requires-python = ">=3.12"
+
+dependencies = [
+    # Job control surface
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    # Every payload crossing the layer boundary is a Pydantic model
+    "pydantic>=2.9",
+    "python-dotenv>=1.0",
+    # Connectors
+    "simple-salesforce>=1.12",
+    "databricks-sql-connector>=3.4",
+    # Pipeline
+    "pandas>=2.2",
+    "sentence-transformers>=3.3",
+    "faiss-cpu>=1.9",
+    "rapidfuzz>=3.10",
+    # Resolution agent
+    "langgraph>=0.2",
+    "anthropic>=0.40",
+    # Owned-table writes
+    "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    # eval/report.py writes grayscale figures into docs/results/
+    "matplotlib>=3.9",
+    "pandas-stubs>=2.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent", "connectors", "eval", "pipeline"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "ANN"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+
+# The ML and connector stack ships incomplete or absent type information.
+# Everything Canon writes is still checked under --strict.
+[[tool.mypy.overrides]]
+module = [
+    "databricks.*",
+    "faiss.*",
+    "langgraph.*",
+    "sentence_transformers.*",
+    "simple_salesforce.*",
+]
+ignore_missing_imports = true

@@ -1,0 +1,54 @@
+[2026-08-05T04:53:38.719Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "I'll analyze the provided codebase context for security vulnerabilities.\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 9,\n      \"description\": \"Non-null assertion (!) on process.env.DATABASE_URL without prior validation. While this will throw at migration time, it lacks explicit error messaging and validation that the URL is a valid PostgreSQL connection string.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/lib/db/index.ts\",\n      \"line\": 33,\n      \"description\": \"DATABASE_URL environmental variable accessed without validation of URL format or connection parameters. Should validate that it's a properly formatted PostgreSQL connection string before using.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \".agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts\",\n      \"line\": 7,\n      \"description\": \"VITE_CLERK_PUBLISHABLE_KEY should be documented as a public/non-sensitive key. While correctly using environment variables (not hardcoded), the error message should clarify this is expected to be public.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \".agents/skills/clerk-backend-api/scripts/extract-tags.js\",\n      \"line\": 9,\n      \"description\": \"Regex pattern matching input without validation. While this is a low-risk script, malformed YAML input could cause unexpected behavior. Input should be validated before regex processing.\"\n    }\n  ],\n  \"riskScore\": 28,\n  \"recommendations\": [\n    \"**Critical: Deployment Context** — The CLAUDE.md specifies this is a single-tenant internal tool. Ensure it is never exposed to the public internet without adding authentication, HTTPS enforcement, and rate limiting.\",\n    \"Add explicit URL validation for DATABASE_URL environment variables using a PostgreSQL connection string validator before database operations.\",\n    \"Implement security headers (CSP, X-Frame-Options, X-Content-Type-Options) in Next.js middleware or next.config.ts for all routes.\",\n    \"Add rate limiting middleware to API routes in engine/main.py and web route handlers to prevent abuse.\",\n    \"Ensure all route handlers validate request bodies with Zod schemas (already documented in AGENTS.md — verify this is consistently implemented).\",\n    \"Verify that HTTPS/TLS is enforced in the deployment configuration (not visible in provided code).\",\n    \"Add CSRF token validation to all mutation endpoints (POST, PATCH, DELETE) in route handlers.\",\n    \"Document in deployment guides that source credentials (Salesforce, Databricks tokens) must never be logged or exposed, only loaded from engine .env at runtime.\",\n    \"Implement security event logging to audit_log table for sensitive operations (resolution approvals, configuration changes).\",\n    \"Validate and sanitize all user-provided values before storing in jsonb columns (ruleset rules, source config).\",\n    \"Review Clerk middleware configurations for proper session management and token validation if authentication is added in future versions.\"\n  ]\n}\n```\n\n## Key Findings\n\n**Strengths:**\n- ✅ Secrets correctly kept out of client bundles and browser via `server-only` markers\n- ✅ Database credentials never stored in `sources.config` — only connection shape\n- ✅ ORM-based queries (Drizzle) prevent SQL injection by default\n- ✅ Environment-based configuration for sensitive values\n- ✅ Good architectural separation between web (config) and engine (data output)\n\n**Security Posture:**\nThe codebase follows good practices for an internal tool. The risk score is **28/100** because most visible code is secure, but several critical concerns are outside the provided code snippets (deployment configuration, actual route handler implementations, HTTPS/security headers).\n\nThe main requirements for safe operation:\n1. **Network isolation** — deploy only on internal networks\n2. **Configuration verification** — ensure deployment enforces HTTPS and rate limiting\n3. **Route validation** — confirm all route handlers validate input with Zod\n\nWould you like me to scan the full codebase for these issues, or review the actual route handler implementations if you can share them?\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "medium",
+        "file": "web/drizzle.config.ts",
+        "line": 9,
+        "description": "Non-null assertion (!) on process.env.DATABASE_URL without prior validation. While this will throw at migration time, it lacks explicit error messaging and validation that the URL is a valid PostgreSQL connection string."
+      },
+      {
+        "severity": "medium",
+        "file": "web/lib/db/index.ts",
+        "line": 33,
+        "description": "DATABASE_URL environmental variable accessed without validation of URL format or connection parameters. Should validate that it's a properly formatted PostgreSQL connection string before using."
+      },
+      {
+        "severity": "low",
+        "file": ".agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts",
+        "line": 7,
+        "description": "VITE_CLERK_PUBLISHABLE_KEY should be documented as a public/non-sensitive key. While correctly using environment variables (not hardcoded), the error message should clarify this is expected to be public."
+      },
+      {
+        "severity": "low",
+        "file": ".agents/skills/clerk-backend-api/scripts/extract-tags.js",
+        "line": 9,
+        "description": "Regex pattern matching input without validation. While this is a low-risk script, malformed YAML input could cause unexpected behavior. Input should be validated before regex processing."
+      }
+    ],
+    "riskScore": 28,
+    "recommendations": [
+      "**Critical: Deployment Context** — The CLAUDE.md specifies this is a single-tenant internal tool. Ensure it is never exposed to the public internet without adding authentication, HTTPS enforcement, and rate limiting.",
+      "Add explicit URL validation for DATABASE_URL environment variables using a PostgreSQL connection string validator before database operations.",
+      "Implement security headers (CSP, X-Frame-Options, X-Content-Type-Options) in Next.js middleware or next.config.ts for all routes.",
+      "Add rate limiting middleware to API routes in engine/main.py and web route handlers to prevent abuse.",
+      "Ensure all route handlers validate request bodies with Zod schemas (already documented in AGENTS.md — verify this is consistently implemented).",
+      "Verify that HTTPS/TLS is enforced in the deployment configuration (not visible in provided code).",
+      "Add CSRF token validation to all mutation endpoints (POST, PATCH, DELETE) in route handlers.",
+      "Document in deployment guides that source credentials (Salesforce, Databricks tokens) must never be logged or exposed, only loaded from engine .env at runtime.",
+      "Implement security event logging to audit_log table for sensitive operations (resolution approvals, configuration changes).",
+      "Validate and sanitize all user-provided values before storing in jsonb columns (ruleset rules, source config).",
+      "Review Clerk middleware configurations for proper session management and token validation if authentication is added in future versions."
+    ]
+  },
+  "durationMs": 32810,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T04:53:38.719Z",
+  "executionId": "audit_1785905585909_sa8ei7"
+}

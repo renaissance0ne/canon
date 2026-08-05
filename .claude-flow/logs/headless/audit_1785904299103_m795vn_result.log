@@ -1,0 +1,65 @@
+[2026-08-05T04:32:22.658Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Based on my analysis of the provided codebase context, here's the security vulnerability report:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 8,\n      \"description\": \"DATABASE_URL exposed via non-null assertion in exported config. Using `process.env.DATABASE_URL!` forces through a potentially undefined value that could be logged, displayed in error messages, or included in config dumps. The config object is exported and could be inadvertently exposed.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/lib/db/index.ts\",\n      \"line\": 28,\n      \"description\": \"Prepared statements disabled (`prepare: false`) to work around Supabase transaction pooler limitations. While Drizzle ORM provides parameterized queries as a mitigation, disabling prepared statements reduces protection against SQL injection. This is a documented architectural compromise but represents elevated database interaction risk.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"AGENTS.md (implicit design)\",\n      \"line\": 0,\n      \"description\": \"No authentication/authorization implemented for v1 (noted as intentional in AGENTS.md § Tech Stack). Any user with network access to the application can perform all operations (create runs, modify rulesets, review conflicts, override resolutions). This is acknowledged as single-tenant internal tool assumption but presents significant insider threat risk.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/lib/db/schema.ts\",\n      \"line\": 47,\n      \"description\": \"Source credentials stored in environment variables indexed by source `kind` (per AGENTS.md § Security Rules). While config is correctly kept secret and stored in engine .env, there is no documented credential rotation, expiration, or audit logging strategy for engine-side secrets (ANTHROPIC_API_KEY, Salesforce credentials, Databricks token, Snowflake password).\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \".agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts\",\n      \"line\": 6,\n      \"description\": \"Using `import.meta.env.VITE_CLERK_PUBLISHABLE_KEY` is correct (client-side public key), but error message suggests `.env` file when it should specify `.env.local` to clarify this is client-side configuration. Minor documentation issue, not a security risk (Clerk publishable keys are meant to be public).\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/lib/server/sources.ts\",\n      \"line\": 25,\n      \"description\": \"No visible input validation shown in provided context, though AGENTS.md § Route Handlers states 'Every route handler validates its body with Zod before touching the database.' Verify all route handlers in `web/app/api/` actually implement this validation. Incomplete data shown prevents full assessment.\"\n    }\n  ],\n  \"riskScore\": 38,\n  \"recommendations\": [\n    \"1. Protect drizzle.config.ts: Wrap DATABASE_URL access in try-catch or ensure config is never exported; consider moving to internal module if not needed in exports.\",\n    \"2. Document the prepared statements trade-off: Add a threat model explaining why Supabase's pooler limitation is acceptable and what SQL injection mitigations remain in place (Drizzle parameterization).\",\n    \"3. Add authentication layer before production: For v1 internal use only. Before expanding access, implement role-based access control (RBAC) — AGENTS.md mentions 'No Clerk' for v1, but address this for v2+.\",\n    \"4. Implement credential rotation policy: Document how Salesforce, Databricks, Snowflake, and Anthropic API credentials are rotated, audited, and revoked. Consider using a secrets manager (AWS Secrets Manager, Vault, etc.).\",\n    \"5. Verify all route handlers have Zod validation: Audit `web/app/api/**/*.ts` to confirm every POST/PATCH endpoint validates input before use. Provide validation examples for conflict resolution (PATCH /conflicts/[conflictId]/resolution), ruleset creation, and source configuration.\",\n    \"6. Add request rate limiting: Implement per-IP or per-session rate limits on `/api/runs`, `/api/conflicts/*/resolution`, and `/api/sources` endpoints to prevent enumeration or resource exhaustion.\",\n    \"7. Enable Postgres row-level security (RLS): Add RLS policies to enforce table ownership (engine writes to entities/matches/conflicts only, web writes to sources/rulesets only) at the database layer, not just application logic.\",\n    \"8. Audit Clerk template templates for NEXT_PUBLIC exposure: Verify no templates accidentally export `CLERK_SECRET_KEY` or other secrets as `NEXT_PUBLIC_*` environment variables.\",\n    \"9. Add Content Security Policy (CSP) headers: Prevent XSS on the web layer with strict CSP (script-src 'self', no inline scripts, no eval).\",\n    \"10. Log all audit_log writes: Ensure every append to `audit_log` is tamper-evident (immutable logging, cryptographic integrity checks if handling sensitive hierarchies).\"\n  ]\n}\n```\n\n**Key findings summary:**\n- **Architecture is security-conscious**: Credentials properly segregated (engine env vs. web), no secrets in database config, table ownership enforced by design.\n- **Medium concerns**: Disabled prepared statements (mitigated by Drizzle), no auth for v1 (acknowledged), environment-based credential management (needs rotation policy).\n- **Low concerns**: Minor documentation issues, need to verify route validation completeness (not shown in context).\n\nThe codebase demonstrates mature security thinking. The main risks are architectural trade-offs (Supabase pooler, intentional single-tenant design) rather than implementation flaws. Before moving to multi-tenant or production use, add authentication, credential rotation, and database-layer enforcement of table ownership.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "medium",
+        "file": "web/drizzle.config.ts",
+        "line": 8,
+        "description": "DATABASE_URL exposed via non-null assertion in exported config. Using `process.env.DATABASE_URL!` forces through a potentially undefined value that could be logged, displayed in error messages, or included in config dumps. The config object is exported and could be inadvertently exposed."
+      },
+      {
+        "severity": "medium",
+        "file": "web/lib/db/index.ts",
+        "line": 28,
+        "description": "Prepared statements disabled (`prepare: false`) to work around Supabase transaction pooler limitations. While Drizzle ORM provides parameterized queries as a mitigation, disabling prepared statements reduces protection against SQL injection. This is a documented architectural compromise but represents elevated database interaction risk."
+      },
+      {
+        "severity": "medium",
+        "file": "AGENTS.md (implicit design)",
+        "line": 0,
+        "description": "No authentication/authorization implemented for v1 (noted as intentional in AGENTS.md § Tech Stack). Any user with network access to the application can perform all operations (create runs, modify rulesets, review conflicts, override resolutions). This is acknowledged as single-tenant internal tool assumption but presents significant insider threat risk."
+      },
+      {
+        "severity": "medium",
+        "file": "web/lib/db/schema.ts",
+        "line": 47,
+        "description": "Source credentials stored in environment variables indexed by source `kind` (per AGENTS.md § Security Rules). While config is correctly kept secret and stored in engine .env, there is no documented credential rotation, expiration, or audit logging strategy for engine-side secrets (ANTHROPIC_API_KEY, Salesforce credentials, Databricks token, Snowflake password)."
+      },
+      {
+        "severity": "low",
+        "file": ".agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts",
+        "line": 6,
+        "description": "Using `import.meta.env.VITE_CLERK_PUBLISHABLE_KEY` is correct (client-side public key), but error message suggests `.env` file when it should specify `.env.local` to clarify this is client-side configuration. Minor documentation issue, not a security risk (Clerk publishable keys are meant to be public)."
+      },
+      {
+        "severity": "low",
+        "file": "web/lib/server/sources.ts",
+        "line": 25,
+        "description": "No visible input validation shown in provided context, though AGENTS.md § Route Handlers states 'Every route handler validates its body with Zod before touching the database.' Verify all route handlers in `web/app/api/` actually implement this validation. Incomplete data shown prevents full assessment."
+      }
+    ],
+    "riskScore": 38,
+    "recommendations": [
+      "1. Protect drizzle.config.ts: Wrap DATABASE_URL access in try-catch or ensure config is never exported; consider moving to internal module if not needed in exports.",
+      "2. Document the prepared statements trade-off: Add a threat model explaining why Supabase's pooler limitation is acceptable and what SQL injection mitigations remain in place (Drizzle parameterization).",
+      "3. Add authentication layer before production: For v1 internal use only. Before expanding access, implement role-based access control (RBAC) — AGENTS.md mentions 'No Clerk' for v1, but address this for v2+.",
+      "4. Implement credential rotation policy: Document how Salesforce, Databricks, Snowflake, and Anthropic API credentials are rotated, audited, and revoked. Consider using a secrets manager (AWS Secrets Manager, Vault, etc.).",
+      "5. Verify all route handlers have Zod validation: Audit `web/app/api/**/*.ts` to confirm every POST/PATCH endpoint validates input before use. Provide validation examples for conflict resolution (PATCH /conflicts/[conflictId]/resolution), ruleset creation, and source configuration.",
+      "6. Add request rate limiting: Implement per-IP or per-session rate limits on `/api/runs`, `/api/conflicts/*/resolution`, and `/api/sources` endpoints to prevent enumeration or resource exhaustion.",
+      "7. Enable Postgres row-level security (RLS): Add RLS policies to enforce table ownership (engine writes to entities/matches/conflicts only, web writes to sources/rulesets only) at the database layer, not just application logic.",
+      "8. Audit Clerk template templates for NEXT_PUBLIC exposure: Verify no templates accidentally export `CLERK_SECRET_KEY` or other secrets as `NEXT_PUBLIC_*` environment variables.",
+      "9. Add Content Security Policy (CSP) headers: Prevent XSS on the web layer with strict CSP (script-src 'self', no inline scripts, no eval).",
+      "10. Log all audit_log writes: Ensure every append to `audit_log` is tamper-evident (immutable logging, cryptographic integrity checks if handling sensitive hierarchies)."
+    ]
+  },
+  "durationMs": 43555,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T04:32:22.658Z",
+  "executionId": "audit_1785904299103_m795vn"
+}

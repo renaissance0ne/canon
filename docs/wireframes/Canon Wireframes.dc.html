@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet"><style>
+body{margin:0;background:#f0eee9;font-family:"IBM Plex Sans",system-ui,sans-serif}
+a{color:#2a5db0}a:hover{color:#1b3f7d}
+.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}
+.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 "IBM Plex Sans",sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 "IBM Plex Sans",sans-serif;color:rgba(0,0,0,.55)}
+.dv-card{max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.16);border-radius:3px;box-shadow:3px 3px 0 rgba(26,26,26,.07);overflow:hidden}
+.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}
+.dv-next{margin:26px 0 0;font:12px/1.5 "IBM Plex Sans",sans-serif;color:rgba(0,0,0,.5)}
+.sub{margin:34px 0 14px;font:600 10.5px/1 "IBM Plex Sans",sans-serif;letter-spacing:.11em;text-transform:uppercase;color:rgba(0,0,0,.42)}
+.wl{font:500 9px/1.4 "IBM Plex Sans",sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#71717a;margin:0}
+.wv{font:400 11px/1.55 "IBM Plex Mono",monospace;color:#18181b;margin:0}
+.wv em{font-style:normal;font-weight:500}
+.wt{font:400 10.5px/1.55 "IBM Plex Sans",sans-serif;color:#3f3f46;margin:0}
+.wh{font:500 13px/1.2 "IBM Plex Sans",sans-serif;letter-spacing:-.01em;color:#18181b;margin:0}
+.sv{font:400 10px/1 "IBM Plex Mono",monospace;letter-spacing:.06em}
+.ann{display:var(--ann-d,block);font:600 14px/1.25 Caveat,cursive;color:var(--pen,#2a5db0);margin:0}
+.kb{display:var(--kb-d,flex);gap:5px;align-items:center;flex-wrap:wrap;font:400 9.5px/1.6 "IBM Plex Mono",monospace;color:#71717a}
+.key{border:1px solid rgba(0,0,0,.22);border-radius:2px;padding:1px 4px}
+.btn{font:500 10px/1 "IBM Plex Sans",sans-serif;padding:6px 9px;border:1px solid #18181b;border-radius:2px;background:#fff;color:#18181b}
+.btn-p{background:#18181b;color:#fff}
+.fld{border:1px solid rgba(0,0,0,.28);border-radius:2px;padding:5px 7px;font:400 10.5px/1.3 "IBM Plex Mono",monospace;color:#3f3f46}
+.hr{height:1px;background:rgba(0,0,0,.14)}
+.nav{font:400 9px/1.4 "IBM Plex Sans",sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#71717a;margin:0}
+.nav-on{color:#18181b;font-weight:600;border-left:2px solid #18181b;padding-left:6px;margin-left:-8px}
+.fbox{border:1px solid rgba(0,0,0,.22);padding:8px 9px;display:flex;flex-direction:column;gap:4px;background:#fff}
+.arw{font:400 12px/1 "IBM Plex Mono",monospace;color:#a1a1aa;align-self:center}
+</style></helmet>
+
+<section class="dv-turn" id="t1" style="{{ rootVars }}">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Canon — end-to-end wireframe flow + logo marks</span></div>
+<p class="wt" style="max-width:760px;margin:0 0 4px;color:rgba(0,0,0,.55)">Low-fidelity, grayscale per the design constraint in AGENTS.md. Blue is pen annotation only — it never appears in the product. Data values are IBM Plex Mono, chrome is IBM Plex Sans, severity is density + a word.</p>
+
+<p class="sub">Journey · web layer over engine layer</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Whole-system flow map — where the human is, where the pipeline is</div>
+<div class="dv-card" style="width:1060px;padding:20px 22px" data-screen-label="1a Flow map">
+<p class="wl">Web layer · what a person touches</p>
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:8px">
+<div class="fbox"><p class="wl">01 · Configure</p><p class="wv">sources ×2</p><p class="wt">CRM side + warehouse side, one active ruleset version</p></div>
+<div class="fbox"><p class="wl">02 · Start run</p><p class="wv">POST /api/runs</p><p class="wt">Inserts run <span style="font-family:'IBM Plex Mono',monospace">queued</span>, returns runId, UI polls</p></div>
+<div class="fbox"><p class="wl">05 · Review queue</p><p class="wv">escalated · 61</p><p class="wt">Diff + rationale, filterable by severity and status</p></div>
+<div class="fbox"><p class="wl">06 · Decide</p><p class="wv">approve / reject / override</p><p class="wt">Every action appends to the audit log</p></div>
+<div class="fbox"><p class="wl">07 · Close</p><p class="wv">audit_log · export</p><p class="wt">Resolved hierarchy + full decision log, JSON or CSV</p></div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:6px 0">
+<div></div>
+<p class="ann" style="text-align:center">↓ dispatch, non-blocking</p>
+<p class="ann" style="text-align:center">↑ escalations surface here</p>
+<div></div><div></div>
+</div>
+<p class="wl">Reconciliation engine · Python, writes its own output tables</p>
+<div style="display:flex;gap:8px;margin-top:8px;background:#fafafa;border:1px dashed rgba(0,0,0,.3);padding:10px">
+<div class="fbox" style="flex:1"><p class="wl">03 · Extract</p><p class="wv">connectors</p><p class="wt">Salesforce + warehouse reads</p></div>
+<span class="arw">→</span>
+<div class="fbox" style="flex:1"><p class="wl">Normalize</p><p class="wv">CanonicalEntity</p><p class="wt">Folding recorded, not destructive</p></div>
+<span class="arw">→</span>
+<div class="fbox" style="flex:1"><p class="wl">Block + match</p><p class="wv">exact → FAISS top-k</p><p class="wt">O(n·k), never all pairs</p></div>
+<span class="arw">→</span>
+<div class="fbox" style="flex:1"><p class="wl">04 · Detect</p><p class="wv">field diff · severity 1–4</p><p class="wt">Orphans and duplicates included</p></div>
+<span class="arw">→</span>
+<div class="fbox" style="flex:1.25"><p class="wl">Resolve</p><p class="wv">rules → agent → validate</p><p class="wt">Model called only when rules do not decide; validate rejects any value not observed</p></div>
+<span class="arw">→</span>
+<div style="display:flex;flex-direction:column;gap:6px;flex:.9">
+<div class="fbox"><p class="wl">auto_applied</p><p class="wv">conf ≥ .85 ∧ sev ≤ 2</p></div>
+<div class="fbox"><p class="wl">escalated</p><p class="wv">everything else</p></div>
+</div>
+</div>
+<div style="display:flex;gap:14px;align-items:center;margin-top:12px;border-top:1px dashed rgba(0,0,0,.3);padding-top:10px">
+<p class="wv" style="color:#52525b">⟲ policy gap found in review → author ruleset v4 → re-run</p>
+<p class="ann">the only loop in the product. rulesets are versioned, never edited — or past runs stop being reproducible</p>
+</div>
+</div></div>
+</div>
+
+<p class="sub">Phase 1 · Configure — the first four minutes</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1b"><div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>First run · empty state</div>
+<div class="dv-card" style="width:480px" data-screen-label="1b Sources empty state">
+<div style="display:flex;min-height:250px">
+<div style="width:86px;border-right:1px solid rgba(0,0,0,.14);padding:12px 10px;display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;align-items:center;gap:5px"><svg width="14" height="14" viewBox="0 0 64 64" style="display:block"><path d="M46.4 23A17 17 0 1 0 46.4 41" fill="none" stroke="#18181b" stroke-width="7.5" stroke-linecap="round"></path><circle cx="56" cy="32" r="6" fill="#18181b"></circle></svg><span style="font:600 9.5px/1 'IBM Plex Sans',sans-serif;letter-spacing:.14em">CANON</span></div>
+<div style="height:4px"></div>
+<p class="nav">Runs</p><p class="nav">Conflicts</p><p class="nav nav-on">Sources</p><p class="nav">Rules</p><p class="nav">Audit</p>
+</div>
+<div style="flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+<p class="wh">Sources</p>
+<div style="border:1px dashed rgba(0,0,0,.32);padding:16px;display:flex;flex-direction:column;gap:9px;background:#fafafa">
+<p class="wt" style="max-width:280px">Canon reads two systems and reconciles them. Configure one CRM side and one warehouse side to start.</p>
+<div style="display:flex;gap:7px"><span class="btn btn-p">Add source</span><span class="btn">Use synthetic dataset · seed 42</span></div>
+</div>
+<p class="ann">the synthetic path is the real onboarding: full pipeline works before anyone touches OAuth</p>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="1c"><div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Add source · panel</div>
+<div class="dv-card" style="width:400px;padding:14px 16px" data-screen-label="1c Add source">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><p class="wh">Add source</p><p class="wl">POST /api/sources</p></div>
+<div class="hr" style="margin:10px 0"></div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;flex-direction:column;gap:4px"><p class="wl">Name</p><div class="fld">Salesforce (prod)</div></div>
+<div style="display:flex;flex-direction:column;gap:4px"><p class="wl">Kind</p><div class="fld" style="display:flex;justify-content:space-between">salesforce<span style="color:#a1a1aa">▾</span></div><p class="wt" style="color:#71717a">salesforce · hubspot · databricks · snowflake · synthetic</p></div>
+<div style="display:flex;flex-direction:column;gap:4px"><p class="wl">Config · non-secret shape only</p><div class="fld" style="line-height:1.6;color:#52525b">{ "objects": ["Account","User",<br>&nbsp;&nbsp;"UserRole","Territory"],<br>&nbsp;&nbsp;"filter": "IsDeleted = false" }</div></div>
+<div style="border-left:2px solid #18181b;padding-left:8px"><p class="wt">Credentials live in the engine environment, keyed by kind. Nothing secret is stored on this record.</p></div>
+<div style="display:flex;gap:7px;justify-content:flex-end"><span class="btn">Cancel</span><span class="btn btn-p">Save source</span></div>
+</div>
+<p class="ann" style="margin-top:10px">Zod-validated before it reaches the database</p>
+</div></div>
+
+<div class="dv-opt" id="1d"><div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Ruleset · survivorship policy, versioned</div>
+<div class="dv-card" style="width:560px;padding:14px 16px" data-screen-label="1d Ruleset editor">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><p class="wh">Ruleset</p><p class="wv" style="color:#52525b">v3 · active</p></div>
+<p class="wt" style="margin-top:5px;color:#71717a">Evaluated most specific first — exact field + exact entityType beats a wildcard. First match wins. No match escalates.</p>
+<div style="display:grid;grid-template-columns:1.1fr .8fr 1fr 1.1fr;gap:0;margin-top:11px;border-top:1px solid rgba(0,0,0,.22)">
+<p class="wl" style="padding:7px 8px 6px 0">Field</p><p class="wl" style="padding:7px 8px 6px 0">Entity</p><p class="wl" style="padding:7px 8px 6px 0">Strategy</p><p class="wl" style="padding:7px 8px 6px 0">Preferred / note</p>
+<p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">parentExternalId</p><p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">account</p><p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)"><em>escalate</em></p><p class="wt" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">hierarchy shape is never auto-resolved</p>
+<p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">territory</p><p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">account</p><p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">most_recent</p><p class="wt" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">newest lastModifiedAt wins</p>
+<p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">roleName</p><p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">user</p><p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">prefer_source</p><p class="wt" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">Salesforce (prod)</p>
+<p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">*</p><p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">*</p><p class="wv" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">most_complete</p><p class="wt" style="padding:6px 8px 6px 0;border-top:1px solid rgba(0,0,0,.1)">fallback · non-null, longer value</p>
+</div>
+<div style="display:flex;gap:7px;margin-top:12px;align-items:center"><span class="btn">Add rule</span><span class="btn btn-p">Save as v4</span><p class="ann" style="margin-left:4px">no in-place edit — v3 stays readable forever</p></div>
+</div></div>
+
+<div class="dv-opt" id="1e"><div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>New run · the only configuration decision</div>
+<div class="dv-card" style="width:420px;padding:14px 16px" data-screen-label="1e New run">
+<p class="wh">New run</p>
+<div style="display:flex;gap:10px;margin-top:12px;align-items:stretch">
+<div style="flex:1;display:flex;flex-direction:column;gap:4px"><p class="wl">Source A · CRM</p><div class="fld" style="display:flex;justify-content:space-between">Salesforce (prod)<span style="color:#a1a1aa">▾</span></div></div>
+<div style="width:1px;background:rgba(0,0,0,.22)"></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:4px"><p class="wl">Source B · warehouse</p><div class="fld" style="display:flex;justify-content:space-between">Databricks GTM<span style="color:#a1a1aa">▾</span></div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:4px;margin-top:10px"><p class="wl">Ruleset</p><div class="fld" style="display:flex;justify-content:space-between">v3 · active<span style="color:#a1a1aa">▾</span></div></div>
+<div style="margin-top:11px;background:#fafafa;border:1px solid rgba(0,0,0,.14);padding:8px 9px">
+<p class="wl">Auto-apply gate · read-only</p>
+<p class="wv" style="margin-top:3px">confidence ≥ 0.85 <em>AND</em> severity ≤ 2</p>
+<p class="wt" style="color:#71717a">Named constants in the engine. The evaluation sweeps them; the console does not edit them.</p>
+</div>
+<div style="display:flex;justify-content:flex-end;margin-top:12px"><span class="btn btn-p">Start run</span></div>
+<p class="ann" style="margin-top:10px">the spine already shows here — A left, B right, one hairline between. same anchor as every diff downstream</p>
+</div></div>
+</div>
+
+<p class="sub">Phase 2 · Run — status is the whole screen</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1f"><div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>Run in progress · polled</div>
+<div class="dv-card" style="width:470px;padding:14px 16px" data-screen-label="1f Run in progress">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><p class="wh">Run <span style="font:400 12px/1 'IBM Plex Mono',monospace;color:#52525b">a41f·c9</span></p><p class="wv" style="color:#52525b">02:14 elapsed</p></div>
+<div style="display:flex;align-items:center;gap:5px;margin-top:12px">
+<span class="wv" style="color:#71717a">queued</span><span class="arw">·</span><span class="wv" style="color:#71717a">extracting</span><span class="arw">·</span><span class="wv" style="background:#18181b;color:#fff;padding:2px 5px"><em>matching</em></span><span class="arw">·</span><span class="wv" style="color:#a1a1aa">detecting</span><span class="arw">·</span><span class="wv" style="color:#a1a1aa">resolving</span><span class="arw">·</span><span class="wv" style="color:#a1a1aa">complete</span>
+</div>
+<div style="height:7px;background:#e4e4e7;margin-top:10px"><div style="width:44%;height:7px;background:#18181b"></div></div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:14px;border-top:1px solid rgba(0,0,0,.22)">
+<div style="padding:8px 8px 8px 0"><p class="wl">Entities A</p><p class="wv"><em>512</em></p></div>
+<div style="padding:8px 8px 8px 0"><p class="wl">Entities B</p><p class="wv"><em>498</em></p></div>
+<div style="padding:8px 8px 8px 0"><p class="wl">Candidate pairs</p><p class="wv"><em>4,096</em></p></div>
+<div style="padding:8px 8px 8px 0"><p class="wl">Matches</p><p class="wv" style="color:#a1a1aa">—</p></div>
+<div style="padding:8px 8px 8px 0;border-top:1px solid rgba(0,0,0,.1)"><p class="wl">Conflicts</p><p class="wv" style="color:#a1a1aa">—</p></div>
+<div style="padding:8px 8px 8px 0;border-top:1px solid rgba(0,0,0,.1)"><p class="wl">Auto-applied</p><p class="wv" style="color:#a1a1aa">—</p></div>
+<div style="padding:8px 8px 8px 0;border-top:1px solid rgba(0,0,0,.1)"><p class="wl">Escalated</p><p class="wv" style="color:#a1a1aa">—</p></div>
+<div style="padding:8px 8px 8px 0;border-top:1px solid rgba(0,0,0,.1)"><p class="wl">Tokens</p><p class="wv" style="color:#a1a1aa">—</p></div>
+</div>
+<p class="ann" style="margin-top:11px">only polled surface in the app. everything else is a server render</p>
+</div></div>
+
+<div class="dv-opt" id="1g"><div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a>Run complete · severity is the handoff into review</div>
+<div class="dv-card" style="width:470px;padding:14px 16px" data-screen-label="1g Run complete">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><p class="wh">Run <span style="font:400 12px/1 'IBM Plex Mono',monospace;color:#52525b">a41f·c9</span></p><p class="wv"><em>complete</em> · 06:31</p></div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);margin-top:12px;border-top:1px solid rgba(0,0,0,.22)">
+<div style="padding:8px 8px 8px 0"><p class="wl">Matches</p><p class="wv"><em>487</em></p></div>
+<div style="padding:8px 8px 8px 0"><p class="wl">Conflicts</p><p class="wv"><em>218</em></p></div>
+<div style="padding:8px 8px 8px 0"><p class="wl">Auto-applied</p><p class="wv"><em>157</em></p></div>
+<div style="padding:8px 8px 8px 0"><p class="wl">Escalated</p><p class="wv"><em>61</em></p></div>
+</div>
+<p class="wl" style="margin-top:14px">By severity</p>
+<div style="display:flex;flex-direction:column;gap:6px;margin-top:7px">
+<div style="display:flex;align-items:center;gap:8px"><span class="sv" style="width:34px">████</span><span class="wl" style="width:74px;color:#18181b;font-weight:600">Structural</span><div style="height:9px;width:96px;background:#18181b"></div><span class="wv">41</span></div>
+<div style="display:flex;align-items:center;gap:8px"><span class="sv" style="width:34px">███░</span><span class="wl" style="width:74px;color:#18181b;font-weight:600">Attribute · 3</span><div style="height:9px;width:150px;background:#3f3f46"></div><span class="wv">63</span></div>
+<div style="display:flex;align-items:center;gap:8px"><span class="sv" style="width:34px">██░░</span><span class="wl" style="width:74px">Attribute · 2</span><div style="height:9px;width:186px;background:#a1a1aa"></div><span class="wv">78</span></div>
+<div style="display:flex;align-items:center;gap:8px"><span class="sv" style="width:34px">█░░░</span><span class="wl" style="width:74px">Cosmetic</span><div style="height:9px;width:88px;background:#d4d4d8"></div><span class="wv">36</span></div>
+</div>
+<div class="hr" style="margin:13px 0 9px"></div>
+<div style="display:flex;flex-direction:column;gap:3px">
+<p class="wv" style="color:#52525b">18:02:11 · run_started · engine</p>
+<p class="wv" style="color:#52525b">18:04:47 · conflicts detected · 218</p>
+<p class="wv" style="color:#52525b">18:08:42 · resolutions proposed · 218 · 41.2k tokens</p>
+</div>
+<div style="display:flex;gap:7px;margin-top:12px"><span class="btn btn-p">Review 61 escalated</span><span class="btn">Export</span></div>
+<p class="ann" style="margin-top:10px">rows stagger in by severity, 20ms apart — the one animated moment in the product</p>
+</div></div>
+
+<div class="dv-opt" id="1h"><div class="dv-olabel"><a class="dv-oid" href="#1h">1h</a>Run failed</div>
+<div class="dv-card" style="width:360px;padding:14px 16px" data-screen-label="1h Run failed">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><p class="wh">Run <span style="font:400 12px/1 'IBM Plex Mono',monospace;color:#52525b">b70e·22</span></p><p class="wv"><em>failed</em></p></div>
+<div style="display:flex;align-items:center;gap:5px;margin-top:11px"><span class="wv" style="color:#71717a">queued</span><span class="arw">·</span><span class="wv" style="background:#18181b;color:#fff;padding:2px 5px"><em>extracting</em></span><span class="arw">·</span><span class="wv" style="color:#d4d4d8">matching · detecting · resolving</span></div>
+<div style="border:1px solid #18181b;padding:8px 9px;margin-top:12px;background:#fafafa">
+<p class="wl">Error</p>
+<p class="wv" style="margin-top:3px;color:#3f3f46">WarehouseConnector: statement timeout after 300s<br>source=Databricks GTM stage=extract</p>
+</div>
+<p class="wt" style="margin-top:9px">No partial output is kept. Failure is recorded and the run is re-runnable with the same ruleset version.</p>
+<div style="display:flex;gap:7px;margin-top:11px"><span class="btn btn-p">Re-run</span><span class="btn">Open audit entry</span></div>
+<p class="ann" style="margin-top:10px">failure is a state, not a toast — it has to survive a page reload</p>
+</div></div>
+</div>
+
+<p class="sub">Phase 3 · Review — three directions for the signature screen</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1i"><div class="dv-olabel"><a class="dv-oid" href="#1i">1i</a>A · stacked ledger — one full diff unit per row, scroll-reviewed</div>
+<div class="dv-card" style="width:640px;padding:14px 16px" data-screen-label="1i Queue direction A">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><p class="wh">Conflicts</p><p class="wv" style="color:#52525b">218 · run a41f·c9</p></div>
+<div style="display:flex;gap:6px;align-items:center;margin-top:10px;padding-bottom:9px;border-bottom:1px solid rgba(0,0,0,.22)">
+<span class="btn" style="padding:4px 7px;background:#18181b;color:#fff">Escalated 61</span><span class="btn" style="padding:4px 7px">Auto-applied 157</span><span class="btn" style="padding:4px 7px">All</span>
+<span style="width:1px;height:16px;background:rgba(0,0,0,.2);margin:0 3px"></span>
+<span class="sv" style="border:1px solid #18181b;padding:3px 5px">████</span><span class="sv" style="border:1px solid rgba(0,0,0,.3);padding:3px 5px">███░</span><span class="sv" style="border:1px solid rgba(0,0,0,.16);padding:3px 5px;color:#71717a">██░░</span><span class="sv" style="padding:3px 5px;color:#a1a1aa">█░░░</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;margin-top:11px">
+
+<div style="border:1px solid rgba(0,0,0,.22)">
+<div style="display:flex;align-items:center;gap:9px;padding:7px 9px;border-bottom:1px solid rgba(0,0,0,.14)">
+<span class="sv" style="background:#18181b;color:#fff;padding:2px 4px">████</span><span class="wl" style="color:#18181b;font-weight:600">Structural</span><span class="wv" style="color:#52525b">parentExternalId</span><span class="wv" style="margin-left:auto;color:#71717a">ACC-4417 · Northwind Traders</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr">
+<div style="padding:8px 9px;border-right:1px solid rgba(0,0,0,.22)"><p class="wl">Salesforce (prod)</p><p class="wv"><em>ACC-4417</em></p><p class="wt" style="color:#71717a">modified 2d ago</p></div>
+<div style="padding:8px 9px"><p class="wl">Databricks GTM</p><p class="wv"><em>ACC-2201</em></p><p class="wt" style="color:#71717a">modified 61d ago</p></div>
+</div>
+<div style="padding:8px 9px;border-top:1px solid rgba(0,0,0,.14);background:#fafafa">
+<div style="display:flex;gap:9px;align-items:baseline"><span class="wv">→ <em>escalated</em></span><span class="wv" style="color:#71717a">no rule decides · severity 4</span><span class="wv" style="margin-left:auto;color:#71717a">■ escalated</span></div>
+<p class="wt" style="margin-top:3px">Re-parenting changes the shape of the hierarchy, so territory rollups depend on this edge. Policy sends every structural conflict to a human.</p>
+<div style="display:flex;gap:6px;margin-top:8px"><span class="btn btn-p">Approve</span><span class="btn">Override</span><span class="btn">Reject</span></div>
+</div>
+</div>
+
+<div style="border:1px solid rgba(0,0,0,.22)">
+<div style="display:flex;align-items:center;gap:9px;padding:7px 9px;border-bottom:1px solid rgba(0,0,0,.14)">
+<span class="sv" style="border:1px solid #18181b;padding:2px 4px">███░</span><span class="wl" style="color:#18181b;font-weight:600">Attribute</span><span class="wv" style="color:#52525b">territory</span><span class="wv" style="margin-left:auto;color:#71717a">ACC-9182 · Meridian Health</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr">
+<div style="padding:8px 9px;border-right:1px solid rgba(0,0,0,.22)"><p class="wl">Salesforce (prod)</p><p class="wv"><span style="color:#71717a">APAC</span><em>-SOUTH</em></p><p class="wt" style="color:#71717a">modified 2d ago</p></div>
+<div style="padding:8px 9px"><p class="wl">Databricks GTM</p><p class="wv" style="color:#71717a">APAC</p><p class="wt" style="color:#71717a">modified 61d ago</p></div>
+</div>
+<div style="padding:8px 9px;border-top:1px solid rgba(0,0,0,.14);background:#fafafa">
+<div style="display:flex;gap:9px;align-items:baseline"><span class="wv">→ <em>APAC-SOUTH</em></span><span class="wv" style="color:#71717a">most_recent · 0.91</span><span class="wv" style="margin-left:auto;color:#71717a">● auto-applied</span></div>
+<p class="wt" style="margin-top:3px">Salesforce shows APAC-SOUTH, modified 2 days ago; the warehouse still shows APAC from 61 days ago. Applied most_recent.</p>
+</div>
+</div>
+
+<div style="border:1px solid rgba(0,0,0,.22)">
+<div style="display:flex;align-items:center;gap:9px;padding:7px 9px;border-bottom:1px solid rgba(0,0,0,.14)">
+<span class="sv" style="color:#71717a;padding:2px 4px">█░░░</span><span class="wl">Cosmetic</span><span class="wv" style="color:#52525b">name</span><span class="wv" style="margin-left:auto;color:#71717a">ACC-0034 · Acme</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr">
+<div style="padding:8px 9px;border-right:1px solid rgba(0,0,0,.22)"><p class="wl">Salesforce (prod)</p><p class="wv"><span style="color:#71717a">Acme</span><em> Inc.</em></p></div>
+<div style="padding:8px 9px"><p class="wl">Databricks GTM</p><p class="wv"><span style="color:#71717a">ACME</span><em> INC</em></p></div>
+</div>
+<div style="padding:8px 9px;border-top:1px solid rgba(0,0,0,.14);background:#fafafa">
+<div style="display:flex;gap:9px;align-items:baseline"><span class="wv">→ <em>Acme Inc.</em></span><span class="wv" style="color:#71717a">normalization · 0.99</span><span class="wv" style="margin-left:auto;color:#71717a">● auto-applied</span></div>
+<p class="wt" style="margin-top:3px">Same normalized name; case and suffix differ only. Kept the Salesforce representation.</p>
+</div>
+</div>
+</div>
+<div class="kb" style="margin-top:12px"><span class="key">j</span><span class="key">k</span> move<span style="width:6px"></span><span class="key">a</span> approve<span style="width:6px"></span><span class="key">e</span> escalate<span style="width:6px"></span><span class="key">o</span> override<span style="width:6px"></span><span class="key">/</span> filter</div>
+<p class="ann" style="margin-top:8px">honest to the spec. cost: ~150px per conflict, so a 400-row queue is a lot of scrolling</p>
+</div></div>
+
+<div class="dv-opt" id="1j"><div class="dv-olabel"><a class="dv-oid" href="#1j">1j</a>B · list + focus pane — keyboard through the list, one hero diff</div>
+<div class="dv-card" style="width:720px" data-screen-label="1j Queue direction B">
+<div style="display:flex;align-items:baseline;justify-content:space-between;padding:12px 14px;border-bottom:1px solid rgba(0,0,0,.22)"><p class="wh">Review · escalated</p><p class="wv" style="color:#52525b">12 of 61</p></div>
+<div style="display:flex;min-height:330px">
+<div style="width:258px;border-right:1px solid rgba(0,0,0,.22)">
+<div style="display:flex;gap:9px;align-items:center;padding:8px 11px;background:#18181b">
+<span class="sv" style="color:#fff">████</span><div><p class="wl" style="color:#fff">Structural</p><p class="wv" style="color:#fff">ACC-4417</p></div><span class="wv" style="margin-left:auto;color:#d4d4d8">▸</span>
+</div>
+<div style="display:flex;gap:9px;align-items:center;padding:8px 11px;border-bottom:1px solid rgba(0,0,0,.1)"><span class="sv">████</span><div><p class="wl">Duplicate</p><p class="wv">ACC-7781</p></div></div>
+<div style="display:flex;gap:9px;align-items:center;padding:8px 11px;border-bottom:1px solid rgba(0,0,0,.1)"><span class="sv">███░</span><div><p class="wl">Attribute</p><p class="wv">USR-2290 · roleName</p></div></div>
+<div style="display:flex;gap:9px;align-items:center;padding:8px 11px;border-bottom:1px solid rgba(0,0,0,.1)"><span class="sv" style="color:#71717a">███░</span><div><p class="wl">Orphan</p><p class="wv">ACC-6650</p></div></div>
+<div style="display:flex;gap:9px;align-items:center;padding:8px 11px;border-bottom:1px solid rgba(0,0,0,.1)"><span class="sv" style="color:#71717a">███░</span><div><p class="wl">Attribute</p><p class="wv">ACC-3312 · territory</p></div></div>
+<div style="display:flex;gap:9px;align-items:center;padding:8px 11px;border-bottom:1px solid rgba(0,0,0,.1)"><span class="sv" style="color:#a1a1aa">██░░</span><div><p class="wl">Attribute</p><p class="wv">ACC-1092 · segment</p></div></div>
+<div style="padding:9px 11px"><p class="ann">list stays put. only the right pane changes — no re-anchoring between conflicts</p></div>
+</div>
+<div style="flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:baseline;gap:9px"><span class="sv" style="background:#18181b;color:#fff;padding:2px 4px">████</span><span class="wl" style="color:#18181b;font-weight:600">Structural</span><span class="wv" style="color:#52525b">parentExternalId</span></div>
+<p class="wv" style="color:#71717a">ACC-4417 · Northwind Traders · 3 children</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid rgba(0,0,0,.22);border-bottom:1px solid rgba(0,0,0,.22)">
+<div style="padding:10px 10px 10px 0;border-right:1px solid rgba(0,0,0,.22)"><p class="wl">Salesforce (prod)</p><p class="wv" style="font-size:13px"><em>ACC-4417</em></p><p class="wt" style="color:#71717a">modified 2d ago · by ops@</p></div>
+<div style="padding:10px"><p class="wl">Databricks GTM</p><p class="wv" style="font-size:13px"><em>ACC-2201</em></p><p class="wt" style="color:#71717a">modified 61d ago · etl load</p></div>
+</div>
+<div><p class="wl">Rule trace</p><p class="wv" style="color:#52525b;margin-top:3px">classify → parentExternalId/account → <em>escalate</em></p><p class="wv" style="color:#a1a1aa">propose · skipped &nbsp; validate · skipped</p></div>
+<div style="border-left:2px solid #18181b;padding-left:9px"><p class="wl">Rationale</p><p class="wt" style="margin-top:2px">Salesforce re-parented Northwind under ACC-4417 two days ago; the warehouse still rolls it up to ACC-2201. Policy escalates every hierarchy edge, so no value was applied.</p></div>
+<div style="display:flex;gap:6px;margin-top:auto;padding-top:6px"><span class="btn btn-p">Approve Salesforce</span><span class="btn">Override…</span><span class="btn">Reject</span><span class="btn" style="margin-left:auto">Skip</span></div>
+<div class="kb"><span class="key">j</span><span class="key">k</span> move<span style="width:6px"></span><span class="key">a</span> approve<span style="width:6px"></span><span class="key">o</span> override<span style="width:6px"></span>never touch the mouse</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="1k"><div class="dv-olabel"><a class="dv-oid" href="#1k">1k</a>C · dense ledger — 36px rows, expand in place</div>
+<div class="dv-card" style="width:720px;padding:14px 16px" data-screen-label="1k Queue direction C">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><p class="wh">Conflicts · 218</p><p class="wv" style="color:#52525b">sorted by severity, then confidence</p></div>
+<div style="display:grid;grid-template-columns:52px 96px 1fr 1fr 1fr 74px 52px 62px;margin-top:11px;border-bottom:1px solid rgba(0,0,0,.28)">
+<p class="wl" style="padding:0 6px 6px 0">Sev</p><p class="wl" style="padding:0 6px 6px 0">Field</p><p class="wl" style="padding:0 6px 6px 0">Salesforce</p><p class="wl" style="padding:0 6px 6px 0">Databricks</p><p class="wl" style="padding:0 6px 6px 0">Proposed</p><p class="wl" style="padding:0 6px 6px 0">Rule</p><p class="wl" style="padding:0 6px 6px 0">Conf</p><p class="wl" style="padding:0 6px 6px 0">Status</p>
+</div>
+<div style="display:grid;grid-template-columns:52px 96px 1fr 1fr 1fr 74px 52px 62px;align-items:center;border-bottom:1px solid rgba(0,0,0,.09);min-height:32px">
+<span class="sv" style="padding:2px 4px;background:#18181b;color:#fff;justify-self:start">████</span><p class="wv" style="padding-right:6px">parentExt…</p><p class="wv"><em>ACC-4417</em></p><p class="wv" style="color:#71717a">ACC-2201</p><p class="wv" style="color:#a1a1aa">—</p><p class="wv" style="color:#71717a">escalate</p><p class="wv" style="color:#a1a1aa">—</p><p class="wv" style="color:#71717a">■ esc</p>
+</div>
+<div style="border-bottom:1px solid rgba(0,0,0,.09);background:#fafafa;padding:9px 0 10px">
+<div style="display:grid;grid-template-columns:52px 96px 1fr 1fr 1fr 74px 52px 62px;align-items:center">
+<span class="sv" style="padding:2px 4px;border:1px solid #18181b;justify-self:start">███░</span><p class="wv" style="padding-right:6px">territory</p><p class="wv"><span style="color:#71717a">APAC</span><em>-SOUTH</em></p><p class="wv" style="color:#71717a">APAC</p><p class="wv"><em>APAC-SOUTH</em></p><p class="wv" style="color:#71717a">most_rec…</p><p class="wv">0.91</p><p class="wv" style="color:#71717a">● auto</p>
+</div>
+<div style="padding:8px 0 0 52px;display:flex;flex-direction:column;gap:7px">
+<p class="wt" style="max-width:470px">Salesforce shows APAC-SOUTH, modified 2 days ago; the warehouse still shows APAC from 61 days ago. Applied most_recent — territory rollups read this field.</p>
+<div style="display:flex;gap:6px"><span class="btn btn-p">Approve</span><span class="btn">Override</span><span class="btn">Reject</span><span class="wv" style="align-self:center;margin-left:6px;color:#71717a">ACC-9182 · Meridian Health</span></div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:52px 96px 1fr 1fr 1fr 74px 52px 62px;align-items:center;border-bottom:1px solid rgba(0,0,0,.09);min-height:32px">
+<span class="sv" style="padding:2px 4px;border:1px solid rgba(0,0,0,.3);justify-self:start;color:#3f3f46">███░</span><p class="wv" style="padding-right:6px">roleName</p><p class="wv"><em>AE — West</em></p><p class="wv" style="color:#71717a">AE — Central</p><p class="wv"><em>AE — West</em></p><p class="wv" style="color:#71717a">prefer_sr…</p><p class="wv">0.88</p><p class="wv" style="color:#71717a">● auto</p>
+</div>
+<div style="display:grid;grid-template-columns:52px 96px 1fr 1fr 1fr 74px 52px 62px;align-items:center;border-bottom:1px solid rgba(0,0,0,.09);min-height:32px">
+<span class="sv" style="padding:2px 4px;color:#71717a;justify-self:start">██░░</span><p class="wv" style="padding-right:6px">segment</p><p class="wv">Mid-Market</p><p class="wv" style="color:#71717a">Midmarket</p><p class="wv"><em>Mid-Market</em></p><p class="wv" style="color:#71717a">most_com…</p><p class="wv">0.96</p><p class="wv" style="color:#71717a">✓ appr</p>
+</div>
+<div style="display:grid;grid-template-columns:52px 96px 1fr 1fr 1fr 74px 52px 62px;align-items:center;border-bottom:1px solid rgba(0,0,0,.09);min-height:32px">
+<span class="sv" style="padding:2px 4px;color:#a1a1aa;justify-self:start">█░░░</span><p class="wv" style="padding-right:6px">name</p><p class="wv">Acme Inc.</p><p class="wv" style="color:#71717a">ACME INC</p><p class="wv"><em>Acme Inc.</em></p><p class="wv" style="color:#71717a">normalize</p><p class="wv">0.99</p><p class="wv" style="color:#71717a">● auto</p>
+</div>
+<p class="ann" style="margin-top:11px">400 conflicts stay scannable, and the diff still reads left-to-right. weaker: values are not spine-aligned</p>
+</div></div>
+</div>
+
+<p class="sub">Phase 3 · Review — states the queue has to hold</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1l"><div class="dv-olabel"><a class="dv-oid" href="#1l">1l</a>Override · open, then recorded</div>
+<div class="dv-card" style="width:470px;padding:14px 16px;display:flex;flex-direction:column;gap:12px" data-screen-label="1l Override">
+<div style="border:1px solid rgba(0,0,0,.22)">
+<div style="display:flex;align-items:center;gap:9px;padding:7px 9px;border-bottom:1px solid rgba(0,0,0,.14)"><span class="sv" style="background:#18181b;color:#fff;padding:2px 4px">████</span><span class="wl" style="color:#18181b;font-weight:600">Structural</span><span class="wv" style="color:#52525b">parentExternalId</span></div>
+<div style="padding:9px;display:flex;flex-direction:column;gap:6px">
+<p class="wl">Override value</p>
+<div class="fld" style="border-color:#18181b;outline:2px solid #18181b;outline-offset:2px;color:#18181b">ACC-2201|</div>
+<div style="display:flex;flex-direction:column;gap:3px">
+<p class="wv" style="color:#52525b">◦ ACC-4417 · Salesforce (prod)</p>
+<p class="wv" style="color:#52525b">◦ ACC-2201 · Databricks GTM</p>
+</div>
+<p class="wt" style="color:#71717a">Must be one of the two observed values, or a legal normalization of one. The engine's validate node applies the same check to the model.</p>
+<div style="display:flex;flex-direction:column;gap:4px"><p class="wl">Note · goes into the audit detail</p><div class="fld" style="color:#71717a">Warehouse is right — SFDC edit was a mis-click, reverting Monday</div></div>
+<div style="display:flex;gap:6px;justify-content:flex-end"><span class="btn">Cancel</span><span class="btn btn-p">Save override</span></div>
+</div>
+</div>
+<div style="background:#fafafa;border:1px solid rgba(0,0,0,.14);padding:9px">
+<p class="wl">After</p>
+<p class="wv" style="margin-top:3px">■/ <em>overridden</em> · reviewer j.rao · 18:22:04</p>
+<p class="wv" style="color:#71717a">proposed ACC-4417 → chose ACC-2201</p>
+<p class="wt" style="margin-top:4px">The proposal is not deleted. Both values and the reviewer's note stay on the record.</p>
+</div>
+<p class="ann">status is shape, not fill: ◦ proposed · ● auto-applied · ■ escalated · ✓ approved · / rejected · ■/ overridden</p>
+</div></div>
+
+<div class="dv-opt" id="1m"><div class="dv-olabel"><a class="dv-oid" href="#1m">1m</a>Orphan and duplicate · the diff row with one side missing</div>
+<div class="dv-card" style="width:470px;padding:14px 16px;display:flex;flex-direction:column;gap:12px" data-screen-label="1m Orphan and duplicate">
+<div style="border:1px solid rgba(0,0,0,.22)">
+<div style="display:flex;align-items:center;gap:9px;padding:7px 9px;border-bottom:1px solid rgba(0,0,0,.14)"><span class="sv" style="background:#18181b;color:#fff;padding:2px 4px">████</span><span class="wl" style="color:#18181b;font-weight:600">Orphan</span><span class="wv" style="color:#52525b">entity absent</span><span class="wv" style="margin-left:auto;color:#71717a">ACC-6650 · 4 children</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr">
+<div style="padding:8px 9px;border-right:1px solid rgba(0,0,0,.22)"><p class="wl">Salesforce (prod)</p><p class="wv"><em>ACC-6650 · Halvorsen Group</em></p><p class="wt" style="color:#71717a">created 6d ago</p></div>
+<div style="padding:8px 9px;background:repeating-linear-gradient(135deg,#fafafa 0 5px,#fff 5px 10px)"><p class="wl">Databricks GTM</p><p class="wv" style="color:#a1a1aa">∅ not present</p><p class="wt" style="color:#71717a">last ETL load 1d ago</p></div>
+</div>
+<div style="padding:8px 9px;border-top:1px solid rgba(0,0,0,.14);background:#fafafa"><p class="wv">→ <em>escalated</em> <span style="color:#71717a">· severity 4 — has children</span></p><p class="wt" style="margin-top:3px">Present in Salesforce, absent from the warehouse after a completed load. Four child accounts would roll up to nothing.</p></div>
+</div>
+<div style="border:1px solid rgba(0,0,0,.22)">
+<div style="display:flex;align-items:center;gap:9px;padding:7px 9px;border-bottom:1px solid rgba(0,0,0,.14)"><span class="sv" style="background:#18181b;color:#fff;padding:2px 4px">████</span><span class="wl" style="color:#18181b;font-weight:600">Duplicate</span><span class="wv" style="color:#52525b">2 → 1</span><span class="wv" style="margin-left:auto;color:#71717a">Trellis Labs</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr">
+<div style="padding:8px 9px;border-right:1px solid rgba(0,0,0,.22)"><p class="wl">Salesforce (prod)</p><p class="wv"><em>ACC-7781 · Trellis Labs</em></p><p class="wv"><em>ACC-8120 · Trellis Labs Inc</em></p><p class="wt" style="color:#71717a">cosine 0.97 · fuzzy 94</p></div>
+<div style="padding:8px 9px"><p class="wl">Databricks GTM</p><p class="wv">DW-4412 · Trellis Labs</p><p class="wt" style="color:#71717a">single record</p></div>
+</div>
+<div style="padding:8px 9px;border-top:1px solid rgba(0,0,0,.14);background:#fafafa"><p class="wv">→ <em>escalated</em> <span style="color:#71717a">· always severity 4</span></p><p class="wt" style="margin-top:3px">Two CRM records match one warehouse record; pipeline totals double-count silently. Merge is a source-system decision, so Canon only reports it.</p></div>
+</div>
+<p class="ann">the spine survives an empty side — hatching, not a blank cell, so a missing value never reads as a rendering bug</p>
+</div></div>
+</div>
+
+<p class="sub">Phase 4 · Close the loop</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1n"><div class="dv-olabel"><a class="dv-oid" href="#1n">1n</a>Audit trail · append-only</div>
+<div class="dv-card" style="width:600px;padding:14px 16px" data-screen-label="1n Audit trail">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><p class="wh">Audit</p><p class="wv" style="color:#52525b">run a41f·c9 · 442 entries</p></div>
+<p class="wt" style="margin-top:5px;color:#71717a">Nothing here is ever updated or deleted. This view is the artifact a reviewer asks for.</p>
+<div style="display:grid;grid-template-columns:78px 1.15fr 88px 1.5fr;margin-top:11px;border-bottom:1px solid rgba(0,0,0,.28)">
+<p class="wl" style="padding:0 6px 6px 0">Time</p><p class="wl" style="padding:0 6px 6px 0">Action</p><p class="wl" style="padding:0 6px 6px 0">Actor</p><p class="wl" style="padding:0 6px 6px 0">Detail</p>
+</div>
+<div style="display:grid;grid-template-columns:78px 1.15fr 88px 1.5fr;font:400 10.5px/1.5 'IBM Plex Mono',monospace;color:#3f3f46">
+<p class="wv" style="padding:6px 6px 6px 0">18:02:11</p><p class="wv" style="padding:6px 6px 6px 0">run_started</p><p class="wv" style="padding:6px 6px 6px 0;color:#71717a">engine</p><p class="wv" style="padding:6px 6px 6px 0;color:#71717a">ruleset v3 · seed 42</p>
+<p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09)">18:04:47</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09)">conflict_detected</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09);color:#71717a">engine</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09);color:#71717a">ACC-4417 · parentExternalId · sev 4</p>
+<p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09)">18:08:42</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09)">resolution_proposed</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09);color:#71717a">agent</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09);color:#71717a">APAC-SOUTH · most_recent · 0.91</p>
+<p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09)">18:08:42</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09)">auto_applied</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09);color:#71717a">agent</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09);color:#71717a">157 resolutions · sev ≤ 2</p>
+<p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09)">18:08:43</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09)">escalated</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09);color:#71717a">agent</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09);color:#71717a">61 resolutions · sev ≥ 3 or conf &lt; .85</p>
+<p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09)">18:22:04</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09)"><em>human_overridden</em></p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09);color:#71717a">j.rao</p><p class="wv" style="padding:6px 6px 6px 0;border-top:1px solid rgba(0,0,0,.09);color:#71717a">ACC-4417 → ACC-2201 · note attached</p>
+</div>
+<div style="display:flex;gap:7px;margin-top:12px;align-items:center"><span class="btn">Filter by action</span><span class="btn">Export log</span><p class="ann" style="margin-left:4px">reads as a ledger, because that is what it is</p></div>
+</div></div>
+
+<div class="dv-opt" id="1o"><div class="dv-olabel"><a class="dv-oid" href="#1o">1o</a>Export · the end of the flow</div>
+<div class="dv-card" style="width:340px;padding:14px 16px" data-screen-label="1o Export">
+<p class="wh">Export run a41f·c9</p>
+<div style="display:flex;flex-direction:column;gap:6px;margin-top:11px">
+<p class="wv">■ resolved hierarchy · 487 entities</p>
+<p class="wv">■ decision log · 218 conflicts</p>
+<p class="wv">□ unmatched / orphans · 19</p>
+<p class="wv">□ run stats + token cost</p>
+</div>
+<div class="hr" style="margin:11px 0"></div>
+<div style="display:flex;gap:7px;align-items:center"><span class="btn btn-p">JSON</span><span class="btn">CSV</span><span class="wv" style="color:#71717a;margin-left:auto">~1.4 MB</span></div>
+<div style="border-left:2px solid #18181b;padding-left:9px;margin-top:12px"><p class="wt">Canon does not write back to Salesforce or the warehouse. It proposes, records, and hands you a file.</p></div>
+<p class="ann" style="margin-top:10px">the deliberate stopping point — write-back changes the risk profile of the whole system</p>
+</div></div>
+</div>
+
+<p class="sub">Logo · minimal cannon firing a ball, grayscale like everything else</p>
+<div class="dv-opts">
+<div class="dv-opt" id="1p"><div class="dv-olabel"><a class="dv-oid" href="#1p">1p</a>Aperture — muzzle as a C, ball clearing it</div>
+<div class="dv-card" style="width:300px;padding:18px;display:flex;flex-direction:column;gap:16px" data-screen-label="1p Logo aperture">
+<div style="display:flex;justify-content:center;padding:8px 0"><svg width="112" height="112" viewBox="0 0 64 64" style="display:block"><path d="M46.4 23A17 17 0 1 0 46.4 41" fill="none" stroke="#18181b" stroke-width="7.5" stroke-linecap="round"></path><circle cx="56" cy="32" r="6" fill="#18181b"></circle></svg></div>
+<div style="display:flex;align-items:center;gap:10px;border-top:1px solid rgba(0,0,0,.14);padding-top:13px"><svg width="26" height="26" viewBox="0 0 64 64" style="display:block"><path d="M46.4 23A17 17 0 1 0 46.4 41" fill="none" stroke="#18181b" stroke-width="7.5" stroke-linecap="round"></path><circle cx="56" cy="32" r="6" fill="#18181b"></circle></svg><span style="font:600 17px/1 'IBM Plex Sans',sans-serif;letter-spacing:.16em;color:#18181b">CANON</span></div>
+<div style="display:flex;align-items:flex-end;gap:12px"><svg width="16" height="16" viewBox="0 0 64 64"><path d="M46.4 23A17 17 0 1 0 46.4 41" fill="none" stroke="#18181b" stroke-width="9" stroke-linecap="round"></path><circle cx="56" cy="32" r="6.5" fill="#18181b"></circle></svg><svg width="20" height="20" viewBox="0 0 64 64"><path d="M46.4 23A17 17 0 1 0 46.4 41" fill="none" stroke="#18181b" stroke-width="8" stroke-linecap="round"></path><circle cx="56" cy="32" r="6" fill="#18181b"></circle></svg><svg width="32" height="32" viewBox="0 0 64 64"><path d="M46.4 23A17 17 0 1 0 46.4 41" fill="none" stroke="#18181b" stroke-width="7.5" stroke-linecap="round"></path><circle cx="56" cy="32" r="6" fill="#18181b"></circle></svg><p class="wl" style="align-self:center">16 · 20 · 32px</p></div>
+<p class="wt">Two elements, one gesture. Reads as a C, a muzzle and a departing ball at once, and survives 16px because nothing thinner than 7.5 units exists in it.</p>
+<p class="ann">recommended · this is the one in the rail on every screen above</p>
+</div></div>
+
+<div class="dv-opt" id="1q"><div class="dv-olabel"><a class="dv-oid" href="#1q">1q</a>Barrel — monoline carriage, trajectory dots</div>
+<div class="dv-card" style="width:300px;padding:18px;display:flex;flex-direction:column;gap:16px" data-screen-label="1q Logo barrel">
+<div style="display:flex;justify-content:center;padding:8px 0"><svg width="112" height="112" viewBox="0 0 64 64" style="display:block"><g fill="none" stroke="#18181b" stroke-linecap="round"><path d="M17 47 41 23" stroke-width="10"></path><circle cx="15" cy="51" r="6.5" stroke-width="4"></circle></g><circle cx="46.5" cy="17.5" r="2.4" fill="#18181b"></circle><circle cx="55" cy="9" r="5.5" fill="#18181b"></circle></svg></div>
+<div style="display:flex;align-items:center;gap:10px;border-top:1px solid rgba(0,0,0,.14);padding-top:13px"><svg width="26" height="26" viewBox="0 0 64 64" style="display:block"><g fill="none" stroke="#18181b" stroke-linecap="round"><path d="M17 47 41 23" stroke-width="10"></path><circle cx="15" cy="51" r="6.5" stroke-width="4"></circle></g><circle cx="46.5" cy="17.5" r="2.4" fill="#18181b"></circle><circle cx="55" cy="9" r="5.5" fill="#18181b"></circle></svg><span style="font:600 17px/1 'IBM Plex Sans',sans-serif;letter-spacing:.16em;color:#18181b">CANON</span></div>
+<div style="display:flex;align-items:flex-end;gap:12px"><svg width="16" height="16" viewBox="0 0 64 64"><g fill="none" stroke="#18181b" stroke-linecap="round"><path d="M17 47 41 23" stroke-width="11"></path><circle cx="15" cy="51" r="6.5" stroke-width="5"></circle></g><circle cx="55" cy="9" r="6" fill="#18181b"></circle></svg><svg width="20" height="20" viewBox="0 0 64 64"><g fill="none" stroke="#18181b" stroke-linecap="round"><path d="M17 47 41 23" stroke-width="10"></path><circle cx="15" cy="51" r="6.5" stroke-width="4.5"></circle></g><circle cx="55" cy="9" r="5.5" fill="#18181b"></circle></svg><svg width="32" height="32" viewBox="0 0 64 64"><g fill="none" stroke="#18181b" stroke-linecap="round"><path d="M17 47 41 23" stroke-width="10"></path><circle cx="15" cy="51" r="6.5" stroke-width="4"></circle></g><circle cx="46.5" cy="17.5" r="2.4" fill="#18181b"></circle><circle cx="55" cy="9" r="5.5" fill="#18181b"></circle></svg><p class="wl" style="align-self:center">16 · 20 · 32px</p></div>
+<p class="wt">Most literal of the three — a barrel on a wheel, a ball, and the shot it just took. The mid dot drops below 20px so the small version carries two objects only.</p>
+<p class="ann">most legible as "cannon", least abstract as a mark</p>
+</div></div>
+
+<div class="dv-opt" id="1r"><div class="dv-olabel"><a class="dv-oid" href="#1r">1r</a>Knockout — solid tile, ball bites the corner</div>
+<div class="dv-card" style="width:300px;padding:18px;display:flex;flex-direction:column;gap:16px" data-screen-label="1r Logo knockout">
+<div style="display:flex;justify-content:center;padding:8px 0"><svg width="112" height="112" viewBox="0 0 64 64" style="display:block"><mask id="ko-lg"><rect width="64" height="64" fill="#fff"></rect><path d="M16 47 38 25" stroke="#000" stroke-width="10" stroke-linecap="round" fill="none"></path><circle cx="52" cy="12" r="9" fill="#000"></circle></mask><rect width="64" height="64" rx="4" fill="#18181b" mask="url(#ko-lg)"></rect></svg></div>
+<div style="display:flex;align-items:center;gap:10px;border-top:1px solid rgba(0,0,0,.14);padding-top:13px"><svg width="26" height="26" viewBox="0 0 64 64" style="display:block"><mask id="ko-md"><rect width="64" height="64" fill="#fff"></rect><path d="M16 47 38 25" stroke="#000" stroke-width="10" stroke-linecap="round" fill="none"></path><circle cx="52" cy="12" r="9" fill="#000"></circle></mask><rect width="64" height="64" rx="4" fill="#18181b" mask="url(#ko-md)"></rect></svg><span style="font:600 17px/1 'IBM Plex Sans',sans-serif;letter-spacing:.16em;color:#18181b">CANON</span></div>
+<div style="display:flex;align-items:flex-end;gap:12px"><svg width="16" height="16" viewBox="0 0 64 64"><mask id="ko-16"><rect width="64" height="64" fill="#fff"></rect><path d="M16 47 38 25" stroke="#000" stroke-width="12" stroke-linecap="round" fill="none"></path><circle cx="52" cy="12" r="10" fill="#000"></circle></mask><rect width="64" height="64" rx="4" fill="#18181b" mask="url(#ko-16)"></rect></svg><svg width="20" height="20" viewBox="0 0 64 64"><mask id="ko-20"><rect width="64" height="64" fill="#fff"></rect><path d="M16 47 38 25" stroke="#000" stroke-width="11" stroke-linecap="round" fill="none"></path><circle cx="52" cy="12" r="9.5" fill="#000"></circle></mask><rect width="64" height="64" rx="4" fill="#18181b" mask="url(#ko-20)"></rect></svg><svg width="32" height="32" viewBox="0 0 64 64"><mask id="ko-32"><rect width="64" height="64" fill="#fff"></rect><path d="M16 47 38 25" stroke="#000" stroke-width="10" stroke-linecap="round" fill="none"></path><circle cx="52" cy="12" r="9" fill="#000"></circle></mask><rect width="64" height="64" rx="4" fill="#18181b" mask="url(#ko-32)"></rect></svg><p class="wl" style="align-self:center">16 · 20 · 32px</p></div>
+<p class="wt">Ink tile with the barrel and ball cut out of it — the shot is negative space, so the mark is a silhouette rather than a drawing. Strongest as an app icon, heaviest inside a hairline UI.</p>
+<p class="ann">2px radius rule is for interactive elements — the mark is allowed its own 4</p>
+</div></div>
+</div>
+
+<p class="dv-next">Try next: "build out <a class="dv-oid" href="#1j">1j</a> at high fidelity" · "give me 3 more directions for the run detail <a class="dv-oid" href="#1g">1g</a>" · "add the 768px stacked version of the diff row" · "tighten <a class="dv-oid" href="#1p">1p</a> — thinner ring, bigger ball"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showAnnotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Wireframe markup&quot;},&quot;penColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#2a5db0&quot;,&quot;options&quot;:[&quot;#2a5db0&quot;,&quot;#c2410c&quot;,&quot;#18181b&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Wireframe markup&quot;},&quot;showKeyboardHints&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Wireframe markup&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    return {
+      rootVars: {
+        '--pen': p.penColor ?? '#2a5db0',
+        '--ann-d': (p.showAnnotations ?? true) ? 'block' : 'none',
+        '--kb-d': (p.showKeyboardHints ?? true) ? 'flex' : 'none'
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

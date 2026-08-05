@@ -1,0 +1,43 @@
+[2026-08-05T03:39:02.147Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "I'll analyze the provided codebase context for security vulnerabilities.\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 7,\n      \"description\": \"Non-null assertion on DATABASE_URL without runtime validation at config load time. While a fallback error exists in web/lib/db/index.ts, the config file will fail silently at build time if missing. Consider validating at config load.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \".agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts\",\n      \"line\": 5,\n      \"description\": \"VITE_CLERK_PUBLISHABLE_KEY is accessed directly from import.meta.env. Ensure all Clerk keys used in templates are verified to be publishable keys, not secret keys. The validation check on line 8-10 is good but should also verify the key format.\"\n    }\n  ],\n  \"riskScore\": 15,\n  \"recommendations\": [\n    \"✓ Good: All secrets (DATABASE_URL, API keys) are properly managed via environment variables, never hardcoded\",\n    \"✓ Good: Database layer uses Drizzle ORM with parameterized queries, preventing SQL injection\",\n    \"✓ Good: 'server-only' marker in web/lib/db/index.ts prevents accidental client-side exposure of DATABASE_URL\",\n    \"✓ Good: Zod validation on all Postgres data access (sourceSchema validation in sources.ts)\",\n    \"✓ Good: Sources config never contains credentials per AGENTS.md guidelines\",\n    \"✓ Good: Clerk authentication middleware properly configured in all template frameworks\",\n    \"Add: Implement input validation in all API route handlers using Zod schemas before database queries (AGENTS.md compliance)\",\n    \"Add: Document that sources.config is non-secret only (already done in code comments, ensure it's enforced in code review)\",\n    \"Add: Verify DATABASE_URL format/validity at application startup, not just at query time\",\n    \"Add: Implement rate limiting on API endpoints when authentication is added\",\n    \"Add: Consider CORS configuration once the engine API is exposed (currently no Next.js CORS config visible)\",\n    \"Note: v1 intentionally has no authentication layer. Ensure this is documented in deployment guides when this changes.\"\n  ]\n}\n```\n\n**Summary**: This codebase follows security best practices well. The architecture properly separates secrets (environment variables only), uses type-safe query builders, and guards server-side code with the `server-only` marker. No SQL injection, XSS, or hardcoded credential vulnerabilities detected. The low risk score reflects a solid security foundation for an early-stage internal tool.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "low",
+        "file": "web/drizzle.config.ts",
+        "line": 7,
+        "description": "Non-null assertion on DATABASE_URL without runtime validation at config load time. While a fallback error exists in web/lib/db/index.ts, the config file will fail silently at build time if missing. Consider validating at config load."
+      },
+      {
+        "severity": "low",
+        "file": ".agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts",
+        "line": 5,
+        "description": "VITE_CLERK_PUBLISHABLE_KEY is accessed directly from import.meta.env. Ensure all Clerk keys used in templates are verified to be publishable keys, not secret keys. The validation check on line 8-10 is good but should also verify the key format."
+      }
+    ],
+    "riskScore": 15,
+    "recommendations": [
+      "✓ Good: All secrets (DATABASE_URL, API keys) are properly managed via environment variables, never hardcoded",
+      "✓ Good: Database layer uses Drizzle ORM with parameterized queries, preventing SQL injection",
+      "✓ Good: 'server-only' marker in web/lib/db/index.ts prevents accidental client-side exposure of DATABASE_URL",
+      "✓ Good: Zod validation on all Postgres data access (sourceSchema validation in sources.ts)",
+      "✓ Good: Sources config never contains credentials per AGENTS.md guidelines",
+      "✓ Good: Clerk authentication middleware properly configured in all template frameworks",
+      "Add: Implement input validation in all API route handlers using Zod schemas before database queries (AGENTS.md compliance)",
+      "Add: Document that sources.config is non-secret only (already done in code comments, ensure it's enforced in code review)",
+      "Add: Verify DATABASE_URL format/validity at application startup, not just at query time",
+      "Add: Implement rate limiting on API endpoints when authentication is added",
+      "Add: Consider CORS configuration once the engine API is exposed (currently no Next.js CORS config visible)",
+      "Note: v1 intentionally has no authentication layer. Ensure this is documented in deployment guides when this changes."
+    ]
+  },
+  "durationMs": 26272,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T03:39:02.147Z",
+  "executionId": "audit_1785901115875_hccxaw"
+}

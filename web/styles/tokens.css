@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+/* Canon — achromatic token set. Twelve steps, zero hues (AGENTS.md § Design System). */
+@theme {
+  --color-g-0:   #FFFFFF;
+  --color-g-50:  #FAFAFA;
+  --color-g-100: #F4F4F5;
+  --color-g-200: #E4E4E7;
+  --color-g-300: #D4D4D8;
+  --color-g-400: #A1A1AA;
+  --color-g-500: #71717A;
+  --color-g-600: #52525B;
+  --color-g-700: #3F3F46;
+  --color-g-800: #27272A;
+  --color-g-900: #18181B;
+  --color-g-950: #09090B;
+
+  --color-surface:         var(--color-g-0);
+  --color-surface-sunken:  var(--color-g-50);
+  --color-hairline:        var(--color-g-200);
+  --color-hairline-strong: var(--color-g-300);
+  --color-ink:             var(--color-g-950);
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+
+  /* Display / Heading / Body / Label are Plex Sans. Value is Plex Mono. */
+  --text-display: 1.75rem;
+  --text-display--line-height: 2rem;
+  --text-display--font-weight: 500;
+  --text-display--letter-spacing: -0.02em;
+
+  --text-heading: 1.0625rem;
+  --text-heading--line-height: 1.5rem;
+  --text-heading--font-weight: 500;
+  --text-heading--letter-spacing: -0.01em;
+
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-body--font-weight: 400;
+
+  --text-label: 0.6875rem;
+  --text-label--line-height: 1rem;
+  --text-label--font-weight: 500;
+  --text-label--letter-spacing: 0.06em;
+
+  --text-value: 0.8125rem;
+  --text-value--line-height: 1.25rem;
+  --text-value--font-weight: 400;
+
+  /* 2px on interactive elements only. Data surfaces stay square. */
+  --radius-control: 2px;
+
+  --ease-canon: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; }
+
+  body {
+    background-color: var(--color-surface-sunken);
+    color: var(--color-g-900);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+  }
+
+  /* No color, so focus must be unmissable. */
+  :focus-visible {
+    outline: 2px solid var(--color-g-900);
+    outline-offset: 2px;
+  }
+
+  a { color: var(--color-g-900); text-decoration-color: var(--color-g-400); }
+  a:hover { text-decoration-color: var(--color-g-900); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ── Glass layer ───────────────────────────────────────────────────────────
+   AGENTS.md forbids shadows, gradients and glows on SURFACES. Glass here is
+   scoped to floating chrome only — the rail veil, sticky headers, overlays —
+   and never to a data surface (no diff row, table or queue is ever glass).
+   It stays achromatic: translucent --g-0 over the hairline field, one
+   hairline border, no tint. Delete these four utilities to remove the
+   treatment entirely; nothing else depends on it.
+   ─────────────────────────────────────────────────────────────────────── */
+@utility glass {
+  background-color: color-mix(in oklab, var(--color-g-0) 66%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid color-mix(in oklab, var(--color-g-900) 9%, transparent);
+}
+
+@utility glass-strong {
+  background-color: color-mix(in oklab, var(--color-g-0) 76%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid color-mix(in oklab, var(--color-g-900) 12%, transparent);
+}
+
+/* Veil: bordered on one edge only — used by the 240px rail and sticky headers. */
+@utility glass-veil {
+  background-color: color-mix(in oklab, var(--color-g-0) 62%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+/* The thing glass blurs against. Hairlines at --g-300 on a 40px field: enough
+   contrast that the blur is actually visible through the chrome above it, and
+   still zero hue and zero gradient. */
+@utility field-grid {
+  background-color: var(--color-surface-sunken);
+  background-image:
+    linear-gradient(to right, var(--color-g-300) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-g-300) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: -1px -1px;
+}

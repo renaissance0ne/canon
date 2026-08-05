@@ -1,0 +1,110 @@
+[2026-08-05T04:17:13.331Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "## Reality check first\n\nThis repo is Phase 1–2 scaffolding, not a running product yet. Confirmed by reading the code:\n\n- **`engine/`** — every pipeline/agent/db module (`db.py`, `main.py`, `pipeline/*.py`, `agent/graph.py`, `connectors/*.py`) is a stub that `raise NotImplementedError`. 36 stub markers across 16 files. There is no matching, detection, or resolution logic running yet — nothing to profile for N+1 queries or redundant computation.\n- **`web/`** — only the landing page, `/get-started`, and `/sources` exist. `runs`, `conflicts`, `rules`, `audit` routes referenced by `NavRail` (`nav-rail.tsx:9-13`) don't exist yet. `@tanstack/react-query` isn't even in `package.json` yet, despite AGENTS.md specifying it for run-status polling.\n- No `useEffect`, `useState`, `useMemo`, `useCallback`, or `useQuery` appear anywhere in `web/app` or `web/components` (grepped, zero hits). So there are currently no intervals, subscriptions, or client-side data fetches to leak.\n\nSo: **no N+1 patterns, no re-render bugs, and no memory leaks exist today**, because the code paths that would cause them haven't been written. Below are (1) two real, present-day findings, and (2) forward-looking guardrails tied to specific features AGENTS.md already specs out — these are the moments in the *planned* build where these exact bug classes will show up if not designed for now.\n\n---\n\n## 1. Real findings in current code\n\n### Redundant query + re-parse in `lib/server/sources.ts`\n\n```ts\nexport async function countSourcesBySide() {\n  const all = await listSources();   // full SELECT + Zod .parse() on every row\n  return { crm: all.filter(...).length, warehouse: ..., synthetic: ... };\n}\n```\nIf a future layout calls both `listSources()` (for the table) and `countSourcesBySide()` (for a header stat), that's two DB round-trips and two full Zod-validation passes over the same rows in one request.\n\n**Fix — dedupe with React's `cache()`** so repeated calls in the same render tree share one query, and computed views derive from the shared result instead of re-fetching:\n\n```ts\nimport { cache } from \"react\";\n\nexport const listSources = cache(async (): Promise<Source[]> => {\n  await connection();\n  const rows = await getDb().select().from(sources).orderBy(sources.createdAt);\n  return rows.map((row) => sourceSchema.parse(row));\n});\n\nexport async function countSourcesBySide() {\n  const all = await listSources(); // second call in the same request hits the cache, not Postgres\n  return { ... };\n}\n```\nThis doesn't conflict with the intentional `connection()` dynamic-rendering opt-out (sources are mutable config — caching *across* requests would be wrong per the reproducibility model in AGENTS.md). `cache()` only dedupes *within* one request.\n\n---\n\n## 2. Forward-looking risks (not bugs yet — guard against when building)\n\nThese map directly to features AGENTS.md specs but hasn't built. Flagging now because the schema/contract decisions made today determine whether these become bugs later.\n\n### A. Conflict queue → classic N+1 (Phase 4, feature 13)\n\nThe conflict queue needs `conflicts` joined to `matches` joined to both `entities`, plus `resolutions`. The naive version — fetch conflicts, then loop to fetch each match's entities — is textbook N+1 against a queue that AGENTS.md says can run to hundreds of rows.\n\n```ts\n// ❌ N+1: one query per conflict\nconst conflicts = await db.select().from(conflictsTable).where(eq(conflictsTable.runId, runId));\nfor (const c of conflicts) {\n  const match = await db.select().from(matches).where(eq(matches.id, c.matchId)); // N queries\n}\n```\n\n```ts\n// ✅ single query via Drizzle relational queries\nconst conflicts = await db.query.conflicts.findMany({\n  where: eq(conflicts.runId, runId),\n  with: {\n    match: { with: { entityA: true, entityB: true } },\n    resolutions: true,\n  },\n  orderBy: desc(conflicts.severity),\n});\n```\nRequires defining `relations()` for `conflicts → matches → entities` and `conflicts → resolutions` in `schema.ts` — worth adding when the conflict queue route handler (`app/api/conflicts/route.ts`) gets built.\n\n### B. Run-status polling → the actual memory-leak risk (Phase 4)\n\nAGENTS.md restricts client fetching to exactly one case: \"TanStack Query — client-side polling of run status only.\" This is the one place a leak can be introduced — an interval that outlives the component or keeps firing after the run is terminal.\n\n```tsx\n// ✅ stops polling once status is terminal; no manual interval/cleanup needed\nconst TERMINAL: RunStatus[] = [\"complete\", \"failed\"];\n\nfunction useRunStatus(runId: string) {\n  return useQuery({\n    queryKey: [\"run-status\", runId],\n    queryFn: () => fetch(`/api/runs/${runId}/status`).then((r) => r.json()),\n    refetchInterval: (query) =>\n      TERMINAL.includes(query.state.data?.status) ? false : 2000,\n  });\n}\n```\nThe bug to avoid: a hand-rolled `setInterval` in `useEffect` that isn't cleared, or a `refetchInterval` that keeps a fixed value and never checks `status`, polling forever after a run finishes.\n\n### C. Engine bulk writes (Phase 2/3) — N+1 at the DB layer\n\n`engine/db.py:58-67` (`write_entities`, `write_matches`, `write_conflicts`) are stubs. AGENTS.md's own rationale for the engine writing Postgres directly is \"a run produces thousands of rows... streaming that back would add a hop.\" That rationale is defeated if the eventual implementation inserts row-by-row instead of in bulk:\n\n```python\n# ❌ thousands of round-trips\nfor e in entities:\n    cur.execute(\"INSERT INTO entities (...) VALUES (%s, %s, ...)\", (...))\n```\n\n```python\n# ✅ one round-trip per batch\nfrom psycopg import sql\nwith conn.cursor() as cur:\n    with cur.copy(\"COPY entities (id, run_id, source_id, external_id, entity_type, fields, parent_external_id, last_modified_at) FROM STDIN\") as copy:\n        for e in entities:\n            copy.write_row((...))\n```\n`COPY` (or `executemany` with `psycopg.extras`) is the right shape given the stated volume — worth deciding now since it affects the `CanonicalEntity → entities row` mapping code.\n\n### D. Resolution agent — LLM call caching (Phase 3)\n\nAGENTS.md already mandates prompt caching on the ruleset block as \"the single largest cost lever,\" but `agent/graph.py` is unimplemented. The N+1-equivalent here is calling Claude once per conflict with the full ruleset re-sent every time instead of cached:\n\n```python\n# ✅ ruleset block cached, repeated across every conflict in the run\nmessages=[{\n    \"role\": \"user\",\n    \"content\": [\n        {\"type\": \"text\", \"text\": ruleset_block, \"cache_control\": {\"type\": \"ephemeral\"}},\n        {\"type\": \"text\", \"text\": conflict_specific_prompt},\n    ],\n}]\n```\nCombine with AGENTS.md's own rule #1 (deterministic `classify` first, model only when the ruleset doesn't decide) — that's the real lever, since most conflicts should never reach the model at all.\n\n---\n\n## React re-renders — what's already right\n\nWorth noting rather than inventing a problem: the components that exist are already well-formed for their scale.\n\n- `SourceTable` (`components/sources/source-table.tsx`) has no `\"use client\"` — it's a Server Component, so it costs zero client re-renders regardless of table size.\n- `PipelineStrip` / `StepList` define their `STAGES`/`steps` arrays at module scope, not inline in the render body, so `.map()` isn't rebuilding from a fresh array identity each render.\n- `NavRail` is the only client component doing real per-render work (`pathname.startsWith` per nav item), and the list is 5 fixed items — not worth `useMemo`.\n\nNothing here needs changing yet.\n\n---\n\n**Bottom line:** there's nothing to fix for N+1/leaks/re-renders today beyond item 1 above. The higher-value move is deciding the four patterns in section 2 *before* Phases 2–4 land, since AGENTS.md already specifies the exact features (conflict queue, status polling, bulk writes, agent calls) where they'd otherwise get baked in.\n",
+  "parsedOutput": {
+    "sections": [
+      {
+        "title": "Reality check first",
+        "content": "\nThis repo is Phase 1–2 scaffolding, not a running product yet. Confirmed by reading the code:\n\n- **`engine/`** — every pipeline/agent/db module (`db.py`, `main.py`, `pipeline/*.py`, `agent/graph.py`, `connectors/*.py`) is a stub that `raise NotImplementedError`. 36 stub markers across 16 files. There is no matching, detection, or resolution logic running yet — nothing to profile for N+1 queries or redundant computation.\n- **`web/`** — only the landing page, `/get-started`, and `/sources` exist. `runs`, `conflicts`, `rules`, `audit` routes referenced by `NavRail` (`nav-rail.tsx:9-13`) don't exist yet. `@tanstack/react-query` isn't even in `package.json` yet, despite AGENTS.md specifying it for run-status polling.\n- No `useEffect`, `useState`, `useMemo`, `useCallback`, or `useQuery` appear anywhere in `web/app` or `web/components` (grepped, zero hits). So there are currently no intervals, subscriptions, or client-side data fetches to leak.\n\nSo: **no N+1 patterns, no re-render bugs, and no memory leaks exist today**, because the code paths that would cause them haven't been written. Below are (1) two real, present-day findings, and (2) forward-looking guardrails tied to specific features AGENTS.md already specs out — these are the moments in the *planned* build where these exact bug classes will show up if not designed for now.\n\n---\n\n",
+        "level": 2
+      },
+      {
+        "title": "1. Real findings in current code",
+        "content": "\n",
+        "level": 2
+      },
+      {
+        "title": "Redundant query + re-parse in `lib/server/sources.ts`",
+        "content": "\n```ts\nexport async function countSourcesBySide() {\n  const all = await listSources();   // full SELECT + Zod .parse() on every row\n  return { crm: all.filter(...).length, warehouse: ..., synthetic: ... };\n}\n```\nIf a future layout calls both `listSources()` (for the table) and `countSourcesBySide()` (for a header stat), that's two DB round-trips and two full Zod-validation passes over the same rows in one request.\n\n**Fix — dedupe with React's `cache()`** so repeated calls in the same render tree share one query, and computed views derive from the shared result instead of re-fetching:\n\n```ts\nimport { cache } from \"react\";\n\nexport const listSources = cache(async (): Promise<Source[]> => {\n  await connection();\n  const rows = await getDb().select().from(sources).orderBy(sources.createdAt);\n  return rows.map((row) => sourceSchema.parse(row));\n});\n\nexport async function countSourcesBySide() {\n  const all = await listSources(); // second call in the same request hits the cache, not Postgres\n  return { ... };\n}\n```\nThis doesn't conflict with the intentional `connection()` dynamic-rendering opt-out (sources are mutable config — caching *across* requests would be wrong per the reproducibility model in AGENTS.md). `cache()` only dedupes *within* one request.\n\n---\n\n",
+        "level": 3
+      },
+      {
+        "title": "2. Forward-looking risks (not bugs yet — guard against when building)",
+        "content": "\nThese map directly to features AGENTS.md specs but hasn't built. Flagging now because the schema/contract decisions made today determine whether these become bugs later.\n\n",
+        "level": 2
+      },
+      {
+        "title": "A. Conflict queue → classic N+1 (Phase 4, feature 13)",
+        "content": "\nThe conflict queue needs `conflicts` joined to `matches` joined to both `entities`, plus `resolutions`. The naive version — fetch conflicts, then loop to fetch each match's entities — is textbook N+1 against a queue that AGENTS.md says can run to hundreds of rows.\n\n```ts\n// ❌ N+1: one query per conflict\nconst conflicts = await db.select().from(conflictsTable).where(eq(conflictsTable.runId, runId));\nfor (const c of conflicts) {\n  const match = await db.select().from(matches).where(eq(matches.id, c.matchId)); // N queries\n}\n```\n\n```ts\n// ✅ single query via Drizzle relational queries\nconst conflicts = await db.query.conflicts.findMany({\n  where: eq(conflicts.runId, runId),\n  with: {\n    match: { with: { entityA: true, entityB: true } },\n    resolutions: true,\n  },\n  orderBy: desc(conflicts.severity),\n});\n```\nRequires defining `relations()` for `conflicts → matches → entities` and `conflicts → resolutions` in `schema.ts` — worth adding when the conflict queue route handler (`app/api/conflicts/route.ts`) gets built.\n\n",
+        "level": 3
+      },
+      {
+        "title": "B. Run-status polling → the actual memory-leak risk (Phase 4)",
+        "content": "\nAGENTS.md restricts client fetching to exactly one case: \"TanStack Query — client-side polling of run status only.\" This is the one place a leak can be introduced — an interval that outlives the component or keeps firing after the run is terminal.\n\n```tsx\n// ✅ stops polling once status is terminal; no manual interval/cleanup needed\nconst TERMINAL: RunStatus[] = [\"complete\", \"failed\"];\n\nfunction useRunStatus(runId: string) {\n  return useQuery({\n    queryKey: [\"run-status\", runId],\n    queryFn: () => fetch(`/api/runs/${runId}/status`).then((r) => r.json()),\n    refetchInterval: (query) =>\n      TERMINAL.includes(query.state.data?.status) ? false : 2000,\n  });\n}\n```\nThe bug to avoid: a hand-rolled `setInterval` in `useEffect` that isn't cleared, or a `refetchInterval` that keeps a fixed value and never checks `status`, polling forever after a run finishes.\n\n",
+        "level": 3
+      },
+      {
+        "title": "C. Engine bulk writes (Phase 2/3) — N+1 at the DB layer",
+        "content": "\n`engine/db.py:58-67` (`write_entities`, `write_matches`, `write_conflicts`) are stubs. AGENTS.md's own rationale for the engine writing Postgres directly is \"a run produces thousands of rows... streaming that back would add a hop.\" That rationale is defeated if the eventual implementation inserts row-by-row instead of in bulk:\n\n```python\n",
+        "level": 3
+      },
+      {
+        "title": "❌ thousands of round-trips",
+        "content": "for e in entities:\n    cur.execute(\"INSERT INTO entities (...) VALUES (%s, %s, ...)\", (...))\n```\n\n```python\n",
+        "level": 1
+      },
+      {
+        "title": "✅ one round-trip per batch",
+        "content": "from psycopg import sql\nwith conn.cursor() as cur:\n    with cur.copy(\"COPY entities (id, run_id, source_id, external_id, entity_type, fields, parent_external_id, last_modified_at) FROM STDIN\") as copy:\n        for e in entities:\n            copy.write_row((...))\n```\n`COPY` (or `executemany` with `psycopg.extras`) is the right shape given the stated volume — worth deciding now since it affects the `CanonicalEntity → entities row` mapping code.\n\n",
+        "level": 1
+      },
+      {
+        "title": "D. Resolution agent — LLM call caching (Phase 3)",
+        "content": "\nAGENTS.md already mandates prompt caching on the ruleset block as \"the single largest cost lever,\" but `agent/graph.py` is unimplemented. The N+1-equivalent here is calling Claude once per conflict with the full ruleset re-sent every time instead of cached:\n\n```python\n",
+        "level": 3
+      },
+      {
+        "title": "✅ ruleset block cached, repeated across every conflict in the run",
+        "content": "messages=[{\n    \"role\": \"user\",\n    \"content\": [\n        {\"type\": \"text\", \"text\": ruleset_block, \"cache_control\": {\"type\": \"ephemeral\"}},\n        {\"type\": \"text\", \"text\": conflict_specific_prompt},\n    ],\n}]\n```\nCombine with AGENTS.md's own rule #1 (deterministic `classify` first, model only when the ruleset doesn't decide) — that's the real lever, since most conflicts should never reach the model at all.\n\n---\n\n",
+        "level": 1
+      },
+      {
+        "title": "React re-renders — what's already right",
+        "content": "Worth noting rather than inventing a problem: the components that exist are already well-formed for their scale.\n\n- `SourceTable` (`components/sources/source-table.tsx`) has no `\"use client\"` — it's a Server Component, so it costs zero client re-renders regardless of table size.\n- `PipelineStrip` / `StepList` define their `STAGES`/`steps` arrays at module scope, not inline in the render body, so `.map()` isn't rebuilding from a fresh array identity each render.\n- `NavRail` is the only client component doing real per-render work (`pathname.startsWith` per nav item), and the list is 5 fixed items — not worth `useMemo`.\n\nNothing here needs changing yet.\n\n---\n\n**Bottom line:** there's nothing to fix for N+1/leaks/re-renders today beyond item 1 above. The higher-value move is deciding the four patterns in section 2 *before* Phases 2–4 land, since AGENTS.md already specifies the exact features (conflict queue, status polling, bulk writes, agent calls) where they'd otherwise get baked in.",
+        "level": 2
+      }
+    ],
+    "codeBlocks": [
+      {
+        "language": "ts",
+        "code": "export async function countSourcesBySide() {\n  const all = await listSources();   // full SELECT + Zod .parse() on every row\n  return { crm: all.filter(...).length, warehouse: ..., synthetic: ... };\n}"
+      },
+      {
+        "language": "ts",
+        "code": "import { cache } from \"react\";\n\nexport const listSources = cache(async (): Promise<Source[]> => {\n  await connection();\n  const rows = await getDb().select().from(sources).orderBy(sources.createdAt);\n  return rows.map((row) => sourceSchema.parse(row));\n});\n\nexport async function countSourcesBySide() {\n  const all = await listSources(); // second call in the same request hits the cache, not Postgres\n  return { ... };\n}"
+      },
+      {
+        "language": "ts",
+        "code": "// ❌ N+1: one query per conflict\nconst conflicts = await db.select().from(conflictsTable).where(eq(conflictsTable.runId, runId));\nfor (const c of conflicts) {\n  const match = await db.select().from(matches).where(eq(matches.id, c.matchId)); // N queries\n}"
+      },
+      {
+        "language": "ts",
+        "code": "// ✅ single query via Drizzle relational queries\nconst conflicts = await db.query.conflicts.findMany({\n  where: eq(conflicts.runId, runId),\n  with: {\n    match: { with: { entityA: true, entityB: true } },\n    resolutions: true,\n  },\n  orderBy: desc(conflicts.severity),\n});"
+      },
+      {
+        "language": "tsx",
+        "code": "// ✅ stops polling once status is terminal; no manual interval/cleanup needed\nconst TERMINAL: RunStatus[] = [\"complete\", \"failed\"];\n\nfunction useRunStatus(runId: string) {\n  return useQuery({\n    queryKey: [\"run-status\", runId],\n    queryFn: () => fetch(`/api/runs/${runId}/status`).then((r) => r.json()),\n    refetchInterval: (query) =>\n      TERMINAL.includes(query.state.data?.status) ? false : 2000,\n  });\n}"
+      },
+      {
+        "language": "python",
+        "code": "# ❌ thousands of round-trips\nfor e in entities:\n    cur.execute(\"INSERT INTO entities (...) VALUES (%s, %s, ...)\", (...))"
+      },
+      {
+        "language": "python",
+        "code": "# ✅ one round-trip per batch\nfrom psycopg import sql\nwith conn.cursor() as cur:\n    with cur.copy(\"COPY entities (id, run_id, source_id, external_id, entity_type, fields, parent_external_id, last_modified_at) FROM STDIN\") as copy:\n        for e in entities:\n            copy.write_row((...))"
+      },
+      {
+        "language": "python",
+        "code": "# ✅ ruleset block cached, repeated across every conflict in the run\nmessages=[{\n    \"role\": \"user\",\n    \"content\": [\n        {\"type\": \"text\", \"text\": ruleset_block, \"cache_control\": {\"type\": \"ephemeral\"}},\n        {\"type\": \"text\", \"text\": conflict_specific_prompt},\n    ],\n}]"
+      }
+    ]
+  },
+  "durationMs": 137956,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "optimize",
+  "timestamp": "2026-08-05T04:17:13.331Z",
+  "executionId": "optimize_1785903295375_b957b6"
+}

@@ -1,0 +1,59 @@
+[2026-08-05T08:48:07.795Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Based on my analysis of the Canon codebase, here is the security vulnerability report:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \"web/.env\",\n      \"line\": 11,\n      \"description\": \"Hardcoded database credentials including username, password, and hostname. While correctly excluded from git via .gitignore, these credentials are visible in the working directory. Test credentials must be rotated immediately if ever exposed.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"web/.env\",\n      \"line\": 28,\n      \"description\": \"Hardcoded Clerk secret key (sk_test_...) visible in plaintext in the working directory. Test credentials but represents a sensitive secret management weakness.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/lib/db/index.ts\",\n      \"line\": 38,\n      \"description\": \"Database connection uses `prepare: false` due to Supabase transaction pooler limitations. While necessary, this disables some query optimization. No security issue but noteworthy constraint.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/lib/db/schema.ts\",\n      \"line\": 1,\n      \"description\": \"Table ownership (engine vs web layers) is enforced by convention only, not by database-level access controls (RLS policies). A compromised service could violate ownership constraints without code-level enforcement.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/.env\",\n      \"line\": 27,\n      \"description\": \"NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is correctly exposed in environment (publishable keys are safe to expose), but ensure this pattern is maintained for all future environment variables.\"\n    }\n  ],\n  \"riskScore\": 35,\n  \"recommendations\": [\n    \"IMMEDIATE: Rotate the Supabase database credentials shown in web/.env (username: postgres.yenteczevefirhvgyvcu, password visible). These are test credentials but should never be committed or displayed.\",\n    \"IMMEDIATE: Rotate the Clerk secret key (sk_test_...) even though it's marked as test. Treat all secrets in the codebase with the same security posture.\",\n    \"Verify that web/.env and engine/.env are in .gitignore and never committed. Current .gitignore is correct (lines 35-37).\",\n    \"Implement database-level Row Level Security (RLS) policies in Postgres to enforce table ownership constraints between web and engine layers, preventing accidental or malicious violation of write boundaries.\",\n    \"Before implementing API routes: Add request validation with Zod on all POST/PATCH/DELETE handlers. The codebase already uses Zod well (see sourceSchema); apply the same pattern consistently.\",\n    \"Before implementing Clerk authentication middleware: Ensure all authenticated routes use proper middleware protection. No auth is currently wired (as noted in sign-up/page.tsx), so verify this before shipping.\",\n    \"Add a pre-commit hook to prevent .env files from being staged (e.g., using husky or git hooks to reject commits containing hardcoded secrets).\",\n    \"Document in AGENTS.md (or a SECURITY.md) that source credentials (SALESFORCE_*, DATABRICKS_TOKEN, SNOWFLAKE_PASSWORD, ANTHROPIC_API_KEY) must NEVER appear in web/.env or in the database config JSONB column. Current guidance exists but add explicit test/CI validation.\",\n    \"For production: Use a secrets manager (e.g., Supabase Vault, AWS Secrets Manager) instead of .env files. Rotate all test credentials before production deployment.\",\n    \"Ensure CLIENT Components never import from lib/db or lib/server/* modules. The 'server-only' marker prevents this, but lint rule enforcement would add defense-in-depth.\"\n  ]\n}\n```\n\n## Summary\n\n**Risk Score: 35/100** (Low-Medium Risk)\n\nThe codebase follows **good foundational security practices**:\n- ✅ Proper use of `server-only` markers to prevent secret leakage to client bundles\n- ✅ Correct .gitignore patterns preventing secret commits\n- ✅ ORM usage (Drizzle) preventing SQL injection\n- ✅ Zod validation on type-critical boundaries\n- ✅ Separation of web and engine secrets (database credentials in web, API keys in engine)\n\n**Critical Issues**:\n1. **Test credentials visible in .env** — While correctly git-ignored and not committed, hardcoded secrets in the working directory represent a risk if the machine is compromised.\n2. **Enforcement by convention only** — Table ownership (what each layer can write) is enforced by discipline and comments, not by database-level access controls.\n\n**Before shipping to production**, rotate all credentials and implement database-level RLS policies. The project is well-architected from a security standpoint; these are implementation-level cleanups rather than architectural flaws.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "high",
+        "file": "web/.env",
+        "line": 11,
+        "description": "Hardcoded database credentials including username, password, and hostname. While correctly excluded from git via .gitignore, these credentials are visible in the working directory. Test credentials must be rotated immediately if ever exposed."
+      },
+      {
+        "severity": "high",
+        "file": "web/.env",
+        "line": 28,
+        "description": "Hardcoded Clerk secret key (sk_test_...) visible in plaintext in the working directory. Test credentials but represents a sensitive secret management weakness."
+      },
+      {
+        "severity": "medium",
+        "file": "web/lib/db/index.ts",
+        "line": 38,
+        "description": "Database connection uses `prepare: false` due to Supabase transaction pooler limitations. While necessary, this disables some query optimization. No security issue but noteworthy constraint."
+      },
+      {
+        "severity": "medium",
+        "file": "web/lib/db/schema.ts",
+        "line": 1,
+        "description": "Table ownership (engine vs web layers) is enforced by convention only, not by database-level access controls (RLS policies). A compromised service could violate ownership constraints without code-level enforcement."
+      },
+      {
+        "severity": "low",
+        "file": "web/.env",
+        "line": 27,
+        "description": "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is correctly exposed in environment (publishable keys are safe to expose), but ensure this pattern is maintained for all future environment variables."
+      }
+    ],
+    "riskScore": 35,
+    "recommendations": [
+      "IMMEDIATE: Rotate the Supabase database credentials shown in web/.env (username: postgres.yenteczevefirhvgyvcu, password visible). These are test credentials but should never be committed or displayed.",
+      "IMMEDIATE: Rotate the Clerk secret key (sk_test_...) even though it's marked as test. Treat all secrets in the codebase with the same security posture.",
+      "Verify that web/.env and engine/.env are in .gitignore and never committed. Current .gitignore is correct (lines 35-37).",
+      "Implement database-level Row Level Security (RLS) policies in Postgres to enforce table ownership constraints between web and engine layers, preventing accidental or malicious violation of write boundaries.",
+      "Before implementing API routes: Add request validation with Zod on all POST/PATCH/DELETE handlers. The codebase already uses Zod well (see sourceSchema); apply the same pattern consistently.",
+      "Before implementing Clerk authentication middleware: Ensure all authenticated routes use proper middleware protection. No auth is currently wired (as noted in sign-up/page.tsx), so verify this before shipping.",
+      "Add a pre-commit hook to prevent .env files from being staged (e.g., using husky or git hooks to reject commits containing hardcoded secrets).",
+      "Document in AGENTS.md (or a SECURITY.md) that source credentials (SALESFORCE_*, DATABRICKS_TOKEN, SNOWFLAKE_PASSWORD, ANTHROPIC_API_KEY) must NEVER appear in web/.env or in the database config JSONB column. Current guidance exists but add explicit test/CI validation.",
+      "For production: Use a secrets manager (e.g., Supabase Vault, AWS Secrets Manager) instead of .env files. Rotate all test credentials before production deployment.",
+      "Ensure CLIENT Components never import from lib/db or lib/server/* modules. The 'server-only' marker prevents this, but lint rule enforcement would add defense-in-depth."
+    ]
+  },
+  "durationMs": 103703,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T08:48:07.795Z",
+  "executionId": "audit_1785919584092_akinsw"
+}

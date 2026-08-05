@@ -1,0 +1,56 @@
+[2026-08-05T04:00:34.106Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Based on my analysis of the Canon codebase, here's the security vulnerability report:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 13,\n      \"description\": \"Unsafe non-null assertion on DATABASE_URL without fallback. Using `process.env.DATABASE_URL!` assumes the variable exists; if missing during build, drizzle-kit will fail with a cryptic error instead of a user-friendly message. Should validate existence with proper error handling like in web/lib/db/index.ts.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 16,\n      \"description\": \"Verbose mode enabled in production config. `verbose: true` may expose schema details and database operations in logs. Should be conditional based on environment (e.g., only enabled in development).\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/lib/db/index.ts\",\n      \"line\": 38,\n      \"description\": \"Global connection caching assumes persistent server lifecycle. The connection is cached on globalThis for HMR in development, but in serverless environments (Vercel, Lambda), connections should be properly closed after each request. Currently relies on connection pooler to handle this, but explicit lifecycle management would be more robust.\"\n    }\n  ],\n  \"riskScore\": 22,\n  \"recommendations\": [\n    \"Fix drizzle.config.ts to match the error handling pattern in web/lib/db/index.ts: check DATABASE_URL existence before using it and throw a descriptive error early\",\n    \"Make drizzle.config.ts verbose mode conditional: `verbose: process.env.NODE_ENV === 'development'`\",\n    \"Consider adding explicit connection closure hooks or verify that Supabase connection pooler properly handles serverless teardown\",\n    \"Verify that all API route handlers in web/app/api/ validate request bodies with Zod schemas (per AGENTS.md § Security Rules)\",\n    \"Document the secrets strategy (currently excellent) in a SECURITY.md file for new contributors\",\n    \"Consider adding rate limiting middleware to API routes for the public surface (especially /api/runs)\",\n    \"Ensure engine .env is never committed (verify .gitignore includes engine/.env, engine/.env.local)\"\n  ],\n  \"strengths\": [\n    \"Excellent architectural separation: secrets properly partitioned between web and engine layers\",\n    \"No hardcoded credentials anywhere in the codebase\",\n    \"Credentials never stored in database config columns (sources.config contains only non-secret shape)\",\n    \"Strong use of TypeScript strict mode and type safety across boundaries\",\n    \"Drizzle ORM prevents SQL injection via parameterized queries\",\n    \"Zod validation at API boundaries prevents invalid data ingestion\",\n    \"server-only imports prevent DATABASE_URL and credentials from leaking to client bundles\",\n    \"Frameworks (Next.js, React, Vue) handle XSS prevention by default\",\n    \"Table ownership model enforces data consistency and prevents unauthorized writes\",\n    \"No authentication layer exposed unnecessarily (single-tenant v1 design)\"\n  ]\n}\n```\n\n**Key Findings:**\n\n✅ **No critical vulnerabilities** — The codebase follows security best practices with proper secret management, ORM usage, and type safety.\n\n⚠️ **Minor config improvements** — The main issues are in build configuration (drizzle.config.ts) and environment-specific concerns, not in application logic.\n\n🔒 **Strong architectural security** — The separation between web/engine layers, table ownership, and credential management demonstrates thoughtful security design. The project is well-positioned for a production data reconciliation system.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "medium",
+        "file": "web/drizzle.config.ts",
+        "line": 13,
+        "description": "Unsafe non-null assertion on DATABASE_URL without fallback. Using `process.env.DATABASE_URL!` assumes the variable exists; if missing during build, drizzle-kit will fail with a cryptic error instead of a user-friendly message. Should validate existence with proper error handling like in web/lib/db/index.ts."
+      },
+      {
+        "severity": "low",
+        "file": "web/drizzle.config.ts",
+        "line": 16,
+        "description": "Verbose mode enabled in production config. `verbose: true` may expose schema details and database operations in logs. Should be conditional based on environment (e.g., only enabled in development)."
+      },
+      {
+        "severity": "low",
+        "file": "web/lib/db/index.ts",
+        "line": 38,
+        "description": "Global connection caching assumes persistent server lifecycle. The connection is cached on globalThis for HMR in development, but in serverless environments (Vercel, Lambda), connections should be properly closed after each request. Currently relies on connection pooler to handle this, but explicit lifecycle management would be more robust."
+      }
+    ],
+    "riskScore": 22,
+    "recommendations": [
+      "Fix drizzle.config.ts to match the error handling pattern in web/lib/db/index.ts: check DATABASE_URL existence before using it and throw a descriptive error early",
+      "Make drizzle.config.ts verbose mode conditional: `verbose: process.env.NODE_ENV === 'development'`",
+      "Consider adding explicit connection closure hooks or verify that Supabase connection pooler properly handles serverless teardown",
+      "Verify that all API route handlers in web/app/api/ validate request bodies with Zod schemas (per AGENTS.md § Security Rules)",
+      "Document the secrets strategy (currently excellent) in a SECURITY.md file for new contributors",
+      "Consider adding rate limiting middleware to API routes for the public surface (especially /api/runs)",
+      "Ensure engine .env is never committed (verify .gitignore includes engine/.env, engine/.env.local)"
+    ],
+    "strengths": [
+      "Excellent architectural separation: secrets properly partitioned between web and engine layers",
+      "No hardcoded credentials anywhere in the codebase",
+      "Credentials never stored in database config columns (sources.config contains only non-secret shape)",
+      "Strong use of TypeScript strict mode and type safety across boundaries",
+      "Drizzle ORM prevents SQL injection via parameterized queries",
+      "Zod validation at API boundaries prevents invalid data ingestion",
+      "server-only imports prevent DATABASE_URL and credentials from leaking to client bundles",
+      "Frameworks (Next.js, React, Vue) handle XSS prevention by default",
+      "Table ownership model enforces data consistency and prevents unauthorized writes",
+      "No authentication layer exposed unnecessarily (single-tenant v1 design)"
+    ]
+  },
+  "durationMs": 55072,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T04:00:34.106Z",
+  "executionId": "audit_1785902379034_ku5wyk"
+}

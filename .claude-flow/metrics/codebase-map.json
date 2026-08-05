@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-08-05T09:06:36.057Z",
+  "projectRoot": "f:\\canon",
+  "structure": {
+    "hasPackageJson": false,
+    "hasTsConfig": false,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1785920796057
+}

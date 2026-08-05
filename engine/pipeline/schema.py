@@ -1,0 +1,207 @@
+"""The tool contract.
+
+Mirrors ``web/types/`` exactly. Every payload crossing the layer boundary is a
+model defined here — no bare dicts. AGENTS.md: *do not change one side without
+changing the other in the same commit.*
+
+The wire format is camelCase because the web layer speaks it; Python stays
+snake_case. ``CanonModel`` carries that translation so no call site has to.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic.alias_generators import to_camel
+
+# ── Enumerations (mirror the Zod enums in web/types/) ────────────────────────
+
+EntityType = Literal["account", "user", "role", "territory"]
+SourceKind = Literal["salesforce", "hubspot", "databricks", "snowflake", "synthetic"]
+RuleStrategy = Literal["prefer_source", "most_recent", "most_complete", "escalate"]
+RunStatus = Literal[
+    "queued", "extracting", "matching", "detecting", "resolving", "complete", "failed"
+]
+ConflictClass = Literal["structural", "attribute", "cosmetic", "orphan", "duplicate"]
+MatchMethod = Literal["exact_key", "embedding", "fuzzy", "agent"]
+ResolutionStatus = Literal[
+    "proposed", "auto_applied", "escalated", "approved", "rejected", "overridden"
+]
+AuditAction = Literal[
+    "run_started",
+    "conflict_detected",
+    "resolution_proposed",
+    "auto_applied",
+    "escalated",
+    "human_approved",
+    "human_overridden",
+    "run_failed",
+]
+
+#: 4 structural · 3 attribute (ownership) · 2 attribute (non-rollup) · 1 cosmetic.
+#: An integer the auto-apply gate reads, not a hue — see AGENTS.md § Severity Model.
+Severity = Literal[1, 2, 3, 4]
+
+DetectedBy = Literal["rule", "agent"]
+
+
+class CanonModel(BaseModel):
+    """Base for every model on the boundary: camelCase on the wire, snake_case here."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+
+# ── Entities ─────────────────────────────────────────────────────────────────
+
+
+class CanonicalEntity(CanonModel):
+    """A record from either side, normalized. Mirrors web/types/entity.ts."""
+
+    external_id: str
+    entity_type: EntityType
+    name: str
+    #: Folded; what matching actually compares. Folding is recorded, not destructive.
+    normalized_name: str
+    #: The hierarchy edge.
+    parent_external_id: str | None = None
+    attributes: dict[str, str | None] = Field(default_factory=dict)
+    #: ISO 8601 — drives recency survivorship.
+    last_modified_at: str | None = None
+    source_id: str
+
+
+# ── Survivorship ─────────────────────────────────────────────────────────────
+
+
+class SurvivorshipRule(CanonModel):
+    """Mirrors web/types/rules.ts.
+
+    Rules are evaluated most specific first: exact ``field`` + exact
+    ``entity_type`` beats a wildcard on either. First match wins. If no rule
+    matches, the conflict escalates — Canon never guesses in the absence of
+    policy.
+    """
+
+    id: str
+    #: ``"*"`` applies to any field.
+    field: str
+    entity_type: str
+    strategy: RuleStrategy
+    preferred_source_id: str | None = None
+    #: Plain English — goes into the agent prompt.
+    description: str
+
+    @model_validator(mode="after")
+    def _prefer_source_needs_a_source(self) -> SurvivorshipRule:
+        if self.strategy == "prefer_source" and not self.preferred_source_id:
+            raise ValueError("preferred_source_id is required when strategy is prefer_source")
+        return self
+
+
+def rule_specificity(rule: SurvivorshipRule) -> int:
+    """Higher is more specific. Ties keep author order, so first match wins."""
+    return (0 if rule.field == "*" else 2) + (0 if rule.entity_type == "*" else 1)
+
+
+# ── Matching and detection ───────────────────────────────────────────────────
+
+
+class MatchSignals(CanonModel):
+    """What the combined confidence was computed from."""
+
+    exact_key: bool
+    cosine: float
+    fuzzy_ratio: float
+
+
+class Match(CanonModel):
+    """A pair of entities believed to be the same real-world thing."""
+
+    id: UUID | None = None
+    run_id: UUID
+    entity_a_id: UUID
+    entity_b_id: UUID
+    confidence: float = Field(ge=0.0, le=1.0)
+    method: MatchMethod
+    signals: MatchSignals
+
+
+class Conflict(CanonModel):
+    """A field-level disagreement within a match. Mirrors web/types/conflict.ts."""
+
+    id: UUID | None = None
+    run_id: UUID
+    match_id: UUID
+    field: str
+    value_a: str
+    value_b: str
+    conflict_class: ConflictClass
+    severity: Severity
+    detected_by: DetectedBy
+
+
+class Resolution(CanonModel):
+    """The proposed and final answer for a conflict."""
+
+    id: UUID | None = None
+    conflict_id: UUID
+    #: `validate` guarantees this is an observed value or a legal normalization.
+    proposed_value: str
+    #: Plain-English, agent-authored. A reviewer decides from this in five seconds.
+    rationale: str
+    #: Which survivorship rule fired, if any.
+    applied_rule_id: str | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    status: ResolutionStatus = "proposed"
+    reviewed_by: str | None = None
+    override_value: str | None = None
+    created_at: datetime | None = None
+    reviewed_at: datetime | None = None
+
+
+# ── Run control (the HTTP surface in main.py) ────────────────────────────────
+
+
+class RunStats(CanonModel):
+    """Mirrors web/types/run.ts. Every field is a headline number in the console."""
+
+    entities_a: int = 0
+    entities_b: int = 0
+    candidate_pairs: int = 0
+    matches: int = 0
+    conflicts: int = 0
+    auto_resolved: int = 0
+    escalated: int = 0
+    tokens_used: int = 0
+
+
+class StartRunRequest(CanonModel):
+    """POST {ENGINE_URL}/runs.
+
+    Only the id crosses the wire. The engine reads sources and ruleset from
+    Postgres using ``run_id``: passing configuration would create two sources of
+    truth for what a run actually executed, which breaks reproducibility.
+    """
+
+    run_id: UUID
+
+
+class StartRunResponse(CanonModel):
+    run_id: UUID
+    accepted: Literal[True] = True
+
+
+class RunStatusResponse(CanonModel):
+    """GET {ENGINE_URL}/runs/:runId/status — polled by the console."""
+
+    run_id: UUID
+    status: RunStatus
+    stats: RunStats
+    error: str | None = None
