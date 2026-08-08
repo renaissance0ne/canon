@@ -1,0 +1,61 @@
+[2026-08-05T14:41:18.443Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "## Findings\n\nThis is a very young codebase — most of AGENTS.md's Phase 2–4 (matching, conflict queue, run-status polling, engine writes) is either `NotImplementedError` stubs or not started. That means most classic issues (N+1 queries, list re-renders, subscription leaks) don't exist *yet* because there's no data-fetching code to have them. Below are the few real issues present now, plus where to watch as you build the stub'd pieces.\n\n### 1. Real issue now: `countSourcesBySide` refetches instead of reusing data\n`web/lib/server/sources.ts:23-30`\n\n```ts\nexport async function countSourcesBySide() {\n  const all = await listSources();   // runs its own DB query\n  ...\n}\n```\n\nNobody currently calls both `listSources()` and `countSourcesBySide()` on the same page, so this isn't firing double queries yet — but it's a trap for the next page that needs both the list and the counts (e.g. a future dashboard). Fix when that need arises: derive counts from the already-fetched array instead of calling `countSourcesBySide()` separately.\n\n### 2. Real issue now: DB client caches on `globalThis`, but no cache/query dedup layer\n`web/lib/db/index.ts` correctly memoizes the connection (good — avoids connection-per-HMR-reload leak). There's no `React.cache()` / `unstable_cache` wrapping around `listSources()` though, so if the sources page ever renders `listSources()` from multiple Server Components in the same request (e.g. a layout + a page both needing it), it'll double-query. Worth wrapping data-access functions in `lib/server/` with `import { cache } from \"react\"` once more than one place reads the same source per-request:\n\n```ts\nimport { cache } from \"react\";\nexport const listSources = cache(async (): Promise<Source[]> => { ... });\n```\n\n### 3. No React re-render issues found\nOnly `\"use client\"` components today are `nav-rail`, `sign-out-control`, `get-started-hero`, `step-list`, `landing-hero`, `pipeline-strip`, `sources-empty-state`, `button`. None hold local state that drives expensive child re-renders, none map over data fetched client-side, and there's no `useEffect`/`useState`/`useQuery` in the tree yet — TanStack Query (mandated for run-status polling per AGENTS.md) hasn't been wired up. Nothing to fix here now.\n\nOne thing to pre-empt: `NavRail` (`web/components/console/nav-rail.tsx`) calls `usePathname()` and re-renders on every route change, mapping over `NAV` (5 items) each time. That's trivial today, but if the rail later grows a badge count (e.g. \"12 escalated\") sourced from polling, keep that polling state in a child, not in `NavRail` itself, so the whole rail doesn't re-render every poll tick.\n\n### 4. No memory leaks found\nNo `setInterval`, `setTimeout`, WebSocket, or subscription code exists yet anywhere in `web/` or `engine/`. Nothing to leak.\n\n### 5. Engine: no query logic exists yet to have N+1 patterns\n`engine/db.py` is 100% `NotImplementedError` stubs (Phase 2–3 not started). `engine/pipeline/*.py` and `engine/agent/*.py` similarly have no implemented loops yet. There's nothing to analyze for N+1 or redundant computation — but since you'll implement these soon, two things worth designing in from the start given AGENTS.md's own architecture doc:\n\n- **`write_entities`/`write_matches`/`write_conflicts`** (`engine/db.py:58-67`) — when implemented, use `psycopg`'s `executemany`/`COPY` for bulk insert, not a per-row `INSERT` in a loop. A run producing \"thousands of rows across entities, matches, conflicts\" (per AGENTS.md) via row-at-a-time inserts is exactly the N+1 pattern the architecture doc is trying to avoid by having the engine write directly instead of going through the web API.\n- **Blocking/matching** (`engine/pipeline/blocking.py`) — AGENTS.md is explicit that this must be `O(n·k)` via FAISS top-k, never all-pairs `O(n²)`. Worth adding an assertion/comment when you implement it, since a naive double-loop is an easy first draft to reach for.\n\n### Bottom line\nThere's nothing to fix for real right now — the codebase is Phase 1 (auth, sources CRUD, landing page). The two concrete, actionable items are: memoize `lib/server/` data-access functions with `React.cache()` before a second consumer appears (#1/#2), and when you implement `engine/db.py`'s writers and `pipeline/blocking.py` in Phase 2, use bulk inserts and FAISS top-k rather than per-row writes or all-pairs comparison, since AGENTS.md already commits to both.\n",
+  "parsedOutput": {
+    "sections": [
+      {
+        "title": "Findings",
+        "content": "\nThis is a very young codebase — most of AGENTS.md's Phase 2–4 (matching, conflict queue, run-status polling, engine writes) is either `NotImplementedError` stubs or not started. That means most classic issues (N+1 queries, list re-renders, subscription leaks) don't exist *yet* because there's no data-fetching code to have them. Below are the few real issues present now, plus where to watch as you build the stub'd pieces.\n\n",
+        "level": 2
+      },
+      {
+        "title": "1. Real issue now: `countSourcesBySide` refetches instead of reusing data",
+        "content": "`web/lib/server/sources.ts:23-30`\n\n```ts\nexport async function countSourcesBySide() {\n  const all = await listSources();   // runs its own DB query\n  ...\n}\n```\n\nNobody currently calls both `listSources()` and `countSourcesBySide()` on the same page, so this isn't firing double queries yet — but it's a trap for the next page that needs both the list and the counts (e.g. a future dashboard). Fix when that need arises: derive counts from the already-fetched array instead of calling `countSourcesBySide()` separately.\n\n",
+        "level": 3
+      },
+      {
+        "title": "2. Real issue now: DB client caches on `globalThis`, but no cache/query dedup layer",
+        "content": "`web/lib/db/index.ts` correctly memoizes the connection (good — avoids connection-per-HMR-reload leak). There's no `React.cache()` / `unstable_cache` wrapping around `listSources()` though, so if the sources page ever renders `listSources()` from multiple Server Components in the same request (e.g. a layout + a page both needing it), it'll double-query. Worth wrapping data-access functions in `lib/server/` with `import { cache } from \"react\"` once more than one place reads the same source per-request:\n\n```ts\nimport { cache } from \"react\";\nexport const listSources = cache(async (): Promise<Source[]> => { ... });\n```\n\n",
+        "level": 3
+      },
+      {
+        "title": "3. No React re-render issues found",
+        "content": "Only `\"use client\"` components today are `nav-rail`, `sign-out-control`, `get-started-hero`, `step-list`, `landing-hero`, `pipeline-strip`, `sources-empty-state`, `button`. None hold local state that drives expensive child re-renders, none map over data fetched client-side, and there's no `useEffect`/`useState`/`useQuery` in the tree yet — TanStack Query (mandated for run-status polling per AGENTS.md) hasn't been wired up. Nothing to fix here now.\n\nOne thing to pre-empt: `NavRail` (`web/components/console/nav-rail.tsx`) calls `usePathname()` and re-renders on every route change, mapping over `NAV` (5 items) each time. That's trivial today, but if the rail later grows a badge count (e.g. \"12 escalated\") sourced from polling, keep that polling state in a child, not in `NavRail` itself, so the whole rail doesn't re-render every poll tick.\n\n",
+        "level": 3
+      },
+      {
+        "title": "4. No memory leaks found",
+        "content": "No `setInterval`, `setTimeout`, WebSocket, or subscription code exists yet anywhere in `web/` or `engine/`. Nothing to leak.\n\n",
+        "level": 3
+      },
+      {
+        "title": "5. Engine: no query logic exists yet to have N+1 patterns",
+        "content": "`engine/db.py` is 100% `NotImplementedError` stubs (Phase 2–3 not started). `engine/pipeline/*.py` and `engine/agent/*.py` similarly have no implemented loops yet. There's nothing to analyze for N+1 or redundant computation — but since you'll implement these soon, two things worth designing in from the start given AGENTS.md's own architecture doc:\n\n- **`write_entities`/`write_matches`/`write_conflicts`** (`engine/db.py:58-67`) — when implemented, use `psycopg`'s `executemany`/`COPY` for bulk insert, not a per-row `INSERT` in a loop. A run producing \"thousands of rows across entities, matches, conflicts\" (per AGENTS.md) via row-at-a-time inserts is exactly the N+1 pattern the architecture doc is trying to avoid by having the engine write directly instead of going through the web API.\n- **Blocking/matching** (`engine/pipeline/blocking.py`) — AGENTS.md is explicit that this must be `O(n·k)` via FAISS top-k, never all-pairs `O(n²)`. Worth adding an assertion/comment when you implement it, since a naive double-loop is an easy first draft to reach for.\n\n",
+        "level": 3
+      },
+      {
+        "title": "Bottom line",
+        "content": "There's nothing to fix for real right now — the codebase is Phase 1 (auth, sources CRUD, landing page). The two concrete, actionable items are: memoize `lib/server/` data-access functions with `React.cache()` before a second consumer appears (#1/#2), and when you implement `engine/db.py`'s writers and `pipeline/blocking.py` in Phase 2, use bulk inserts and FAISS top-k rather than per-row writes or all-pairs comparison, since AGENTS.md already commits to both.",
+        "level": 3
+      }
+    ],
+    "codeBlocks": [
+      {
+        "language": "ts",
+        "code": "export async function countSourcesBySide() {\n  const all = await listSources();   // runs its own DB query\n  ...\n}"
+      },
+      {
+        "language": "ts",
+        "code": "import { cache } from \"react\";\nexport const listSources = cache(async (): Promise<Source[]> => { ... });"
+      }
+    ]
+  },
+  "durationMs": 53957,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "optimize",
+  "timestamp": "2026-08-05T14:41:18.443Z",
+  "executionId": "optimize_1785940824486_mpsvro"
+}

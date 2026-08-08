@@ -1,0 +1,1063 @@
+[2026-08-08T05:30:02.305Z] PROMPT
+============================================================
+Analyze this codebase for security vulnerabilities:
+- Check for hardcoded secrets (API keys, passwords)
+- Identify SQL injection risks
+- Find XSS vulnerabilities
+- Check for insecure dependencies
+- Identify authentication/authorization issues
+
+Provide a JSON report with:
+{
+  "vulnerabilities": [{ "severity": "high|medium|low", "file": "...", "line": N, "description": "..." }],
+  "riskScore": 0-100,
+  "recommendations": ["..."]
+}
+
+## Codebase Context
+
+--- .agents/skills/clerk-backend-api/scripts/extract-tags.js ---
+let input = "";
+process.stdin.on("data", d => input += d);
+process.stdin.on("end", () => {
+  const lines = input.replace(/\r/g, "").split("\n");
+  let inTags = false;
+  for (const line of lines) {
+    if (line === "tags:") { inTags = true; continue; }
+    if (inTags && line.length > 0 && line[0] !== " ") break;
+    if (inTags) {
+      const m = line.match(/^\s{2}- name:\s*(.+)/);
+      if (m) console.log(m[1]);
+    }
+  }
+});
+
+
+--- engine/.venv/Lib/site-packages/matplotlib/backends/web_backend/js/mpl.js (truncated) ---
+/* Put everything inside the global mpl namespace */
+/* global mpl */
+window.mpl = {};
+
+mpl.get_websocket_type = function () {
+    if (typeof WebSocket !== 'undefined') {
+        return WebSocket;
+    } else if (typeof MozWebSocket !== 'undefined') {
+        return MozWebSocket;
+    } else {
+        alert(
+            'Your browser does not have WebSocket support. ' +
+                'Please try Chrome, Safari or Firefox ≥ 6. ' +
+                'Firefox 4 and 5 are also supported but you ' +
+                'have to enable WebSockets in about:config.'
+        );
+    }
+};
+
+mpl.figure = function (figure_id, websocket, ondownload, parent_element) {
+    this.id = figure_id;
+
+    this.ws = websocket;
+
+    this.supports_binary = this.ws.binaryType !== undefined;
+
+    this.capture_scroll = false;
+
+    if (!this.supports_binary) {
+        var warnings = document.getElementById('mpl-warnings');
+        if (warnings) {
+            warnings.style.display = 'block';
+            warnings.textContent =
+                'This browser does not support binary websocket messages. ' +
+                'Performance may be slow.';
+        }
+    }
+
+    this.imageObj = new Image();
+
+    this.context = undefined;
+    this.message = undefined;
+    this.canvas = undefined;
+    this.rubberband_canvas = undefined;
+    this.rubberband_context = undefined;
+    this.format_dropdown = undefined;
+
+    this.image_mode = 'full';
+
+    this.root = document.createElement('div');
+    this.root.setAttribute('style', 'display: inline-block');
+    this._root_extra_style(this.root);
+
+    parent_element.appendChild(this.root);
+
+    this._init_header(this);
+    this._init_canvas(this);
+    this._init_toolbar(this);
+
+    var fig = this;
+
+    this.waiting = false;
+
+    this.ws.onopen = function () {
+        fig.send_message('supports_binary', { value: fig.supports_binary });
+        fig.send_message('send_image_mode', {});
+        if (fig.ratio !== 1) {
+            fig.send_message('set_device_pixel_ratio', {
+                device_pixel_ratio: fig.ratio,
+            });
+        }
+        fig.send_message('refresh', {});
+    };
+
+    this.imageObj.onload = function () {
+        if (fig.image_mode === 'full') {
+            // Full images could contain transparency (where diff images
+            // almost always do), so we need to clear the canvas so that
+            // there is no ghosting.
+            fig.context.clearRect(0, 0, fig.canvas.width, fig.canvas.height);
+        }
+        fig.context.drawImage(fig.imageObj, 0, 0);
+    };
+
+    this.imageObj.onunload = function () {
+        fig.ws.close();
+    };
+
+    this.ws.onmessage = this._make_on_message_function(this);
+
+    this.ondownload = ondownload;
+};
+
+mpl.figure.prototype._init_header = function () {
+    var titlebar = document.createElement('div');
+    titlebar.classList =
+        'ui-dialog-titlebar ui-widget-header ui-corner-all ui-helper-clearfix';
+    var titletext = document.createElement('div');
+    titletext.classList = 'ui-dialog-title';
+    titletext.setAttribute(
+        'style',
+        'width: 100%; text-align: center; padding: 3px;'
+    );
+    titlebar.appendChild(titletext);
+    this.root.appendChild(titlebar);
+    this.header = titletext;
+};
+
+mpl.figure.prototype._canvas_extra_style = function (_canvas_div) {};
+
+mpl.figure.prototype._root_extra_style = function (_canvas_div) {};
+
+mpl.figure.prototype._init_canvas = function () {
+    var fig = this;
+
+    var canvas_div = (this.canvas_div = document.createElement('div'));
+    canvas_div.setAttribute('tabindex', '0');
+    canvas_div.setAttribute(
+        'style',
+        'border: 1px solid #ddd;' +
+            'box-sizing: content-box;' +
+            'clear: both;' +
+            'min-height: 1px;' +
+            'min-width: 1px;' +
+            'outline: 0;' +
+            'overflow: hidden;' +
+            'position: relative;' +
+            'resize: both;' +
+            'z-index: 2;'
+    );
+
+    function on_keyboard_event_closure(name) {
+        return function (event) {
+            return fig.key_event(event, name);
+        };
+    }
+
+    canvas_div.addEventListener(
+        'keydown',
+        on_keyboard_event_closure('key_press')
+    );
+    canvas_div.addEventListener(
+        'keyup',
+        on_keyboard_event_closure('key_release')
+    );
+
+    this._canvas_extra_style(canvas_div);
+    this.root.appendChild(canvas_div);
+
+    var canvas = (this.canvas = document.createElement('canvas'));
+    canvas.classList.add('mpl-canvas');
+    canvas.setAttribute(
+        'style',
+        'box-sizing: content-box;' +
+            'pointer-events: none;' +
+            'position: relative;' +
+            'z-index: 0;'
+    );
+
+    this.context = canvas.getContext('2d');
+
+    var backingStore =
+        this.context.backingStorePixelRatio ||
+        this.context.webkitBackingStorePixelRatio ||
+        this.context.mozBackingStorePixelRatio ||
+        this.context.msBackingStorePixelRatio ||
+        this.context.oBackingStorePixelRatio ||
+        this.conte
+
+--- engine/.venv/Lib/site-packages/matplotlib/backends/web_backend/js/mpl_tornado.js ---
+/* This .js file contains functions for matplotlib's built-in
+   tornado-based server, that are not relevant when embedding WebAgg
+   in another web application. */
+
+/* exported mpl_ondownload */
+function mpl_ondownload(figure, format) {
+    window.open(figure.id + '/download.' + format, '_blank');
+}
+
+
+--- engine/.venv/Lib/site-packages/matplotlib/backends/web_backend/js/nbagg_mpl.js (truncated) ---
+/* global mpl */
+
+var comm_websocket_adapter = function (comm) {
+    // Create a "websocket"-like object which calls the given IPython comm
+    // object with the appropriate methods. Currently this is a non binary
+    // socket, so there is still some room for performance tuning.
+    var ws = {};
+
+    ws.binaryType = comm.kernel.ws.binaryType;
+    ws.readyState = comm.kernel.ws.readyState;
+    function updateReadyState(_event) {
+        if (comm.kernel.ws) {
+            ws.readyState = comm.kernel.ws.readyState;
+        } else {
+            ws.readyState = 3; // Closed state.
+        }
+    }
+    comm.kernel.ws.addEventListener('open', updateReadyState);
+    comm.kernel.ws.addEventListener('close', updateReadyState);
+    comm.kernel.ws.addEventListener('error', updateReadyState);
+
+    ws.close = function () {
+        comm.close();
+    };
+    ws.send = function (m) {
+        //console.log('sending', m);
+        comm.send(m);
+    };
+    // Register the callback with on_msg.
+    comm.on_msg(function (msg) {
+        //console.log('receiving', msg['content']['data'], msg);
+        var data = msg['content']['data'];
+        if (data['blob'] !== undefined) {
+            data = {
+                data: new Blob(msg['buffers'], { type: data['blob'] }),
+            };
+        }
+        // Pass the mpl event to the overridden (by mpl) onmessage function.
+        ws.onmessage(data);
+    });
+    return ws;
+};
+
+mpl.mpl_figure_comm = function (comm, msg) {
+    // This is the function which gets called when the mpl process
+    // starts-up an IPython Comm through the "matplotlib" channel.
+
+    var id = msg.content.data.id;
+    // Get hold of the div created by the display call when the Comm
+    // socket was opened in Python.
+    var element = document.getElementById(id);
+    var ws_proxy = comm_websocket_adapter(comm);
+
+    function ondownload(figure, _format) {
+        window.open(figure.canvas.toDataURL());
+    }
+
+    var fig = new mpl.figure(id, ws_proxy, ondownload, element);
+
+    // Call onopen now - mpl needs it, as it is assuming we've passed it a real
+    // web socket which is closed, not our websocket->open comm proxy.
+    ws_proxy.onopen();
+
+    fig.parent_element = element;
+    fig.cell_info = mpl.find_output_cell("<div id='" + id + "'></div>");
+    if (!fig.cell_info) {
+        console.error('Failed to find cell for figure', id, fig);
+        return;
+    }
+    fig.cell_info[0].output_area.element.on(
+        'cleared',
+        { fig: fig },
+        fig._remove_fig_handler
+    );
+};
+
+mpl.figure.prototype.handle_close = function (fig, msg) {
+    var width = fig.canvas.width / fig.ratio;
+    fig.cell_info[0].output_area.element.off(
+        'cleared',
+        fig._remove_fig_handler
+    );
+    fig.resizeObserverInstance.unobserve(fig.canvas_div);
+
+    // Update the output cell to use the data from the current canvas.
+    fig.push_to_output();
+    var dataURL = fig.canvas.toDataURL();
+    // Re-enable the keyboard manager in IPython - without this line, in FF,
+    // the notebook keyboard shortcuts fail.
+    IPython.keyboard_manager.enable();
+    fig.parent_element.innerHTML =
+        '<img src="' + dataURL + '" width="' + width + '">';
+    fig.close_ws(fig, msg);
+};
+
+mpl.figure.prototype.close_ws = function (fig, msg) {
+    fig.send_message('closing', msg);
+    // fig.ws.close()
+};
+
+mpl.figure.prototype.push_to_output = function (_remove_interactive) {
+    // Turn the data on the canvas into data in the output cell.
+    var width = this.canvas.width / this.ratio;
+    var dataURL = this.canvas.toDataURL();
+    this.cell_info[1]['text/html'] =
+        '<img src="' + dataURL + '" width="' + width + '">';
+};
+
+mpl.figure.prototype.updated_canvas_event = function () {
+    // Tell IPython that the notebook contents must change.
+    IPython.notebook.set_dirty(true);
+    this.send_message('ack', {});
+    var fig = this;
+    // Wait a second, then push the new image to the DOM so
+    // that it is saved nicely (might be nice to debounce this).
+    setTimeout(function () {
+        fig.push_to_output();
+    }, 1000);
+};
+
+mpl.figure.prototype._init_toolbar = function () {
+    var fig = this;
+
+    var toolbar = document.createElement('div');
+    toolbar.classList = 'btn-toolbar';
+    this.root.appendChild(toolbar);
+
+    function on_click_closure(name) {
+        return function (_event) {
+            return fig.toolbar_button_onclick(name);
+        };
+    }
+
+    function on_mouseover_closure(tooltip) {
+        return function (event) {
+            if (!event.currentTarget.disabled) {
+                return fig.toolbar_button_onmouseover(tooltip);
+            }
+        };
+    }
+
+    fig.buttons = {};
+    var buttonGroup = document.createElement('div');
+    buttonGroup.classList = 'btn-group';
+    var button;
+    for (var toolbar_ind in mpl.toolbar_items) {
+        var name = mpl.toolbar_items[toolbar_ind][0];
+        var tooltip = mpl.toolbar_items[toolbar_ind][1];
+        var image = mpl.toolbar_items[toolbar_ind][2];
+        v
+
+--- engine/.venv/Lib/site-packages/sklearn/utils/_repr_html/estimator.js (truncated) ---
+/*  Authors: The scikit-learn developers
+ SPDX-License-Identifier: BSD-3-Clause
+*/
+
+function copyToClipboard(text, element) {
+    // Get the parameter prefix from the closest toggleable content
+    const toggleableContent = element.closest('.sk-toggleable__content');
+    const paramPrefix = toggleableContent ? toggleableContent.dataset.paramPrefix : '';
+    const fullParamName = paramPrefix ? `${paramPrefix}${text}` : text;
+
+    const originalStyle = element.style;
+    const computedStyle = window.getComputedStyle(element);
+    const originalWidth = computedStyle.width;
+    const originalHTML = element.innerHTML.replace('Copied!', '');
+
+    navigator.clipboard.writeText(fullParamName)
+        .then(() => {
+            element.style.width = originalWidth;
+            element.style.color = 'green';
+            element.innerHTML = "Copied!";
+
+            setTimeout(() => {
+                element.innerHTML = originalHTML;
+                element.style = originalStyle;
+            }, 2000);
+        })
+        .catch(err => {
+            console.error('Failed to copy:', err);
+            element.style.color = 'red';
+            element.innerHTML = "Failed!";
+            setTimeout(() => {
+                element.innerHTML = originalHTML;
+                element.style = originalStyle;
+            }, 2000);
+        });
+    return false;
+}
+
+document.querySelectorAll('.copy-paste-icon').forEach(function(element) {
+    const toggleableContent = element.closest('.sk-toggleable__content');
+    const paramPrefix = toggleableContent ? toggleableContent.dataset.paramPrefix : '';
+
+    const parent = element.parentElement;
+    if (!parent || !parent.nextElementSibling) {
+        console.warn('Expected copy-paste icon is missing from the DOM structure');
+        return;
+    }
+
+    const paramName = element.parentElement.nextElementSibling
+        .textContent.trim().split(' ')[0];
+    const fullParamName = paramPrefix ? `${paramPrefix}${paramName}` : paramName;
+
+    element.setAttribute('title', fullParamName);
+});
+
+/**
+ * Copy the list of feature names formatted as a Python list.
+ *
+ * @param {HTMLElement} element - The copy button inside a `.features` block; its siblings
+ *   contain a `details` element and a table containing feature named.
+ * @returns {boolean} Always returns `false` so callers can prevent the default click behavior.
+ */
+function copyFeatureNamesToClipboard(element) {
+    var detailsElem = element.closest('.features').querySelector('details');
+    var wasOpen = detailsElem.open;
+    detailsElem.open = true;
+    var content = element.closest('.features').querySelector('tbody')
+                  .innerText.trim();
+    if (!wasOpen) detailsElem.open = false;
+    const rows = content.split('\n').map(row => `    "${row}"`);
+    const formattedText = `[\n${rows.join(',\n')},\n]`;
+    const originalHTML = element.innerHTML.replace('✔', '');
+    const originalStyle = element.style;
+    const copyMark = document.createElement('span');
+    copyMark.innerHTML = '✔';
+    copyMark.style.color = 'blue';
+    copyMark.style.fontSize = '1em';
+
+    navigator.clipboard.writeText(formattedText)
+        .then(() => {
+            element.style.display = 'none';
+            element.parentElement.appendChild(copyMark);
+
+            setTimeout(() => {
+                copyMark.remove();
+                element.innerHTML = originalHTML;
+                element.style = originalStyle;
+            }, 1000);
+        })
+        .catch(err => {
+            console.error('Failed to copy:', err);
+            element.style.color = 'orange';
+            element.innerHTML = "Failed!";
+            setTimeout(() => {
+                element.innerHTML = originalHTML;
+                element.style = originalStyle;
+            }, 1000);
+        });
+    return false;
+}
+/**
+ * Adapted from Skrub
+ * https://github.com/skrub-data/skrub/blob/403466d1d5d4dc76a7ef569b3f8228db59a31dc3/skrub/_reporting/_data/templates/report.js#L789
+ * @returns "light" or "dark"
+ */
+function detectTheme(element) {
+    const body = document.querySelector('body');
+
+    // Check VSCode theme
+    const themeKindAttr = body.getAttribute('data-vscode-theme-kind');
+    const themeNameAttr = body.getAttribute('data-vscode-theme-name');
+
+    if (themeKindAttr && themeNameAttr) {
+        const themeKind = themeKindAttr.toLowerCase();
+        const themeName = themeNameAttr.toLowerCase();
+
+        if (themeKind.includes("dark") || themeName.includes("dark")) {
+            return "dark";
+        }
+        if (themeKind.includes("light") || themeName.includes("light")) {
+            return "light";
+        }
+    }
+
+    // Check Jupyter theme
+    if (body.getAttribute('data-jp-theme-light') === 'false') {
+        return 'dark';
+    } else if (body.getAttribute('data-jp-theme-light') === 'true') {
+        return 'light';
+    }
+
+    // Guess based on a parent 
+
+--- engine/.venv/Lib/site-packages/torch/utils/model_dump/code.js (truncated) ---
+import { h, Component, render } from 'https://unpkg.com/preact?module';
+import htm from 'https://unpkg.com/htm?module';
+
+const html = htm.bind(h);
+
+const BURNED_IN_MODEL_INFO = null;
+
+// https://stackoverflow.com/a/20732091
+function humanFileSize(size) {
+  if (size == 0) { return "0 B"; }
+  var i = Math.floor( Math.log(size) / Math.log(1024) );
+  return (size / Math.pow(1024, i)).toFixed(2) * 1 + ' ' + ['B', 'kB', 'MB', 'GB', 'TB'][i];
+}
+
+function caret(down) {
+  return down ? "\u25BE" : "\u25B8";
+}
+
+class Blamer {
+  constructor() {
+    this.blame_on_click = false;
+    this.aux_content_pane = null;
+  }
+
+  setAuxContentPane(pane) {
+    this.aux_content_pane = pane;
+  }
+
+  readyBlame() {
+    this.blame_on_click = true;
+  }
+
+  maybeBlame(arg) {
+    if (!this.blame_on_click) {
+      return;
+    }
+    this.blame_on_click = false;
+    if (!this.aux_content_pane) {
+      return;
+    }
+    this.aux_content_pane.doBlame(arg);
+  }
+}
+
+let blame = new Blamer();
+
+class Hider extends Component {
+  constructor() {
+    super();
+    this.state = { shown: null };
+  }
+
+  componentDidMount() {
+    this.setState({ shown: this.props.shown === "true" });
+  }
+
+  render({name, children}, {shown}) {
+    let my_caret = html`<span class=caret onClick=${() => this.click()} >${caret(shown)}</span>`;
+    return html`<div data-hider-title=${name} data-shown=${shown}>
+      <h2>${my_caret} ${name}</h2>
+      <div>${shown ? this.props.children : []}</div></div>`;
+  }
+
+  click() {
+    this.setState({shown: !this.state.shown});
+  }
+}
+
+function ModelSizeSection({model: {file_size, zip_files}}) {
+  let store_size = 0;
+  let compr_size = 0;
+  for (const zi of zip_files) {
+    if (zi.compression === 0) {
+      // TODO: Maybe check that compressed_size === file_size.
+      store_size += zi.compressed_size;
+    } else {
+      compr_size += zi.compressed_size;
+    }
+  }
+  let zip_overhead = file_size - store_size - compr_size;
+  // TODO: Better formatting.  Right-align this.
+  return html`
+    <${Hider} name="Model Size" shown=true>
+    <pre>.
+      Model size: ${file_size} (${humanFileSize(file_size)})
+      Stored files: ${store_size} (${humanFileSize(store_size)})
+      Compressed files: ${compr_size} (${humanFileSize(compr_size)})
+      Zip overhead: ${zip_overhead} (${humanFileSize(zip_overhead)})
+    </pre><//>`;
+}
+
+function StructuredDataSection({name, data, shown}) {
+  return html`
+    <${Hider} name=${name} shown=${shown}>
+    <div style="font-family:monospace;">
+      <${StructuredData} data=${data} indent="" prefix=""/>
+    </div><//>`;
+}
+
+class StructuredData extends Component {
+  constructor() {
+    super();
+    this.state = { shown: false };
+
+    this.INLINE_TYPES = new Set(["boolean", "number", "string"])
+    this.IGNORED_STATE_KEYS = new Set(["training", "_is_full_backward_hook"])
+  }
+
+  click() {
+    this.setState({shown: !this.state.shown});
+  }
+
+  expando(data) {
+    if (data === null || this.INLINE_TYPES.has(typeof(data))) {
+      return false;
+    }
+    if (typeof(data) != "object") {
+      throw new Error("Not an object");
+    }
+    if (Array.isArray(data)) {
+      // TODO: Maybe show simple lists and tuples on one line.
+      return true;
+    }
+    if (data.__tuple_values__) {
+      // TODO: Maybe show simple lists and tuples on one line.
+      return true;
+    }
+    if (data.__is_dict__) {
+      // TODO: Maybe show simple (empty?) dicts on one line.
+      return true;
+    }
+    if (data.__module_type__) {
+      return true;
+    }
+    if (data.__tensor_v2__) {
+      return false;
+    }
+    if (data.__qtensor__) {
+      return false;
+    }
+    throw new Error("Can't handle data type.", data);
+  }
+
+  renderHeadline(data) {
+    if (data === null) {
+      return "None";
+    }
+    if (typeof(data) == "boolean") {
+      const sd = String(data);
+      return sd.charAt(0).toUpperCase() + sd.slice(1);
+    }
+    if (typeof(data) == "number") {
+      return JSON.stringify(data);
+    }
+    if (typeof(data) == "string") {
+      return JSON.stringify(data);
+    }
+    if (typeof(data) != "object") {
+      throw new Error("Not an object");
+    }
+    if (Array.isArray(data)) {
+      return "list([";
+    }
+    if (data.__tuple_values__) {
+      return "tuple((";
+    }
+    if (data.__is_dict__) {
+      return "dict({";
+    }
+    if (data.__module_type__) {
+      return data.__module_type__ + "()";
+    }
+    if (data.__tensor_v2__) {
+      const [storage, offset, size, stride, grad] = data.__tensor_v2__;
+      const [dtype, key, device, numel] = storage;
+      return this.renderTensor(
+        "tensor", dtype, key, device, numel, offset, size, stride, grad, []);
+    }
+    if (data.__qtensor__) {
+      const [storage, offset, size, stride, quantizer, grad] = data.__qtensor__;
+      const [dtype, key, device, numel] = storage;
+      let extra_parts = [];
+      if (quant
+
+--- engine/.venv/Lib/site-packages/urllib3/contrib/emscripten/emscripten_fetch_worker.js ---
+let Status = {
+  SUCCESS_HEADER: -1,
+  SUCCESS_EOF: -2,
+  ERROR_TIMEOUT: -3,
+  ERROR_EXCEPTION: -4,
+};
+
+let connections = new Map();
+let nextConnectionID = 1;
+const encoder = new TextEncoder();
+
+self.addEventListener("message", async function (event) {
+  if (event.data.close) {
+    let connectionID = event.data.close;
+    connections.delete(connectionID);
+    return;
+  } else if (event.data.getMore) {
+    let connectionID = event.data.getMore;
+    let { curOffset, value, reader, intBuffer, byteBuffer } =
+      connections.get(connectionID);
+    // if we still have some in buffer, then just send it back straight away
+    if (!value || curOffset >= value.length) {
+      // read another buffer if required
+      try {
+        let readResponse = await reader.read();
+
+        if (readResponse.done) {
+          // read everything - clear connection and return
+          connections.delete(connectionID);
+          Atomics.store(intBuffer, 0, Status.SUCCESS_EOF);
+          Atomics.notify(intBuffer, 0);
+          // finished reading successfully
+          // return from event handler
+          return;
+        }
+        curOffset = 0;
+        connections.get(connectionID).value = readResponse.value;
+        value = readResponse.value;
+      } catch (error) {
+        console.log("Request exception:", error);
+        let errorBytes = encoder.encode(error.message);
+        let written = errorBytes.length;
+        byteBuffer.set(errorBytes);
+        intBuffer[1] = written;
+        Atomics.store(intBuffer, 0, Status.ERROR_EXCEPTION);
+        Atomics.notify(intBuffer, 0);
+      }
+    }
+
+    // send as much buffer as we can
+    let curLen = value.length - curOffset;
+    if (curLen > byteBuffer.length) {
+      curLen = byteBuffer.length;
+    }
+    byteBuffer.set(value.subarray(curOffset, curOffset + curLen), 0);
+
+    Atomics.store(intBuffer, 0, curLen); // store current length in bytes
+    Atomics.notify(intBuffer, 0);
+    curOffset += curLen;
+    connections.get(connectionID).curOffset = curOffset;
+
+    return;
+  } else {
+    // start fetch
+    let connectionID = nextConnectionID;
+    nextConnectionID += 1;
+    const intBuffer = new Int32Array(event.data.buffer);
+    const byteBuffer = new Uint8Array(event.data.buffer, 8);
+    try {
+      const response = await fetch(event.data.url, event.data.fetchParams);
+      // return the headers first via textencoder
+      var headers = [];
+      for (const pair of response.headers.entries()) {
+        headers.push([pair[0], pair[1]]);
+      }
+      let headerObj = {
+        headers: headers,
+        status: response.status,
+        connectionID,
+      };
+      const headerText = JSON.stringify(headerObj);
+      let headerBytes = encoder.encode(headerText);
+      let written = headerBytes.length;
+      byteBuffer.set(headerBytes);
+      intBuffer[1] = written;
+      // make a connection
+      connections.set(connectionID, {
+        reader: response.body.getReader(),
+        intBuffer: intBuffer,
+        byteBuffer: byteBuffer,
+        value: undefined,
+        curOffset: 0,
+      });
+      // set header ready
+      Atomics.store(intBuffer, 0, Status.SUCCESS_HEADER);
+      Atomics.notify(intBuffer, 0);
+      // all fetching after this goes through a new postmessage call with getMore
+      // this allows for parallel requests
+    } catch (error) {
+      console.log("Request exception:", error);
+      let errorBytes = encoder.encode(error.message);
+      let written = errorBytes.length;
+      byteBuffer.set(errorBytes);
+      intBuffer[1] = written;
+      Atomics.store(intBuffer, 0, Status.ERROR_EXCEPTION);
+      Atomics.notify(intBuffer, 0);
+    }
+  }
+});
+self.postMessage({ inited: true });
+
+
+--- .agents/skills/clerk-astro-patterns/templates/astro-basic-auth/src/middleware.ts ---
+import { clerkMiddleware } from "@clerk/astro/server"
+
+export const onRequest = clerkMiddleware()
+
+
+--- .agents/skills/clerk-nextjs-patterns/templates/nextjs-basic-auth/proxy.ts ---
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware()
+
+export const config = {
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/(api|trpc)(.*)',
+  ],
+}
+
+
+--- .agents/skills/clerk-nuxt-patterns/templates/nuxt-basic-auth/nuxt.config.ts ---
+export default defineNuxtConfig({
+  modules: ['@clerk/nuxt'],
+})
+
+
+--- .agents/skills/clerk-react-patterns/templates/react-basic-auth/vite.config.ts ---
+import react from "@vitejs/plugin-react"
+import { defineConfig } from "vite"
+
+export default defineConfig({
+	plugins: [react()],
+})
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/app/routes.ts ---
+import { type RouteConfig, index } from "@react-router/dev/routes"
+
+export default [index("routes/home.tsx")] satisfies RouteConfig
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/react-router.config.ts ---
+import type { Config } from '@react-router/dev/config'
+
+export default {
+  ssr: true,
+} satisfies Config
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/vite.config.ts ---
+import { reactRouter } from "@react-router/dev/vite"
+import { defineConfig } from "vite"
+
+export default defineConfig({
+	plugins: [reactRouter()],
+	// React Router v8 dev SSR externalizes @clerk/react-router, which then resolves
+	// react-router's production build while the app uses the development build —
+	// two Router contexts, and useNavigate() throws inside ClerkProvider.
+	// See https://github.com/remix-run/react-router/issues/15232
+	ssr: {
+		noExternal: ["@clerk/react-router"],
+	},
+})
+
+
+--- .agents/skills/clerk-tanstack-patterns/templates/tanstack-basic-auth/src/start.ts ---
+import { clerkMiddleware } from '@clerk/tanstack-react-start/server';
+import { createStart } from '@tanstack/react-start';
+
+export const startInstance = createStart(() => {
+  return {
+    requestMiddleware: [clerkMiddleware()],
+  };
+});
+
+
+--- .agents/skills/clerk-tanstack-patterns/templates/tanstack-basic-auth/vite.config.ts ---
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { defineConfig } from 'vite'
+import tsConfigPaths from 'vite-tsconfig-paths'
+import viteReact from '@vitejs/plugin-react'
+
+export default defineConfig({
+  server: {
+    port: 3000,
+  },
+  plugins: [
+    tsConfigPaths({
+      projects: ['./tsconfig.json'],
+    }),
+    tanstackStart(),
+    viteReact(),
+  ],
+})
+
+
+--- .agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts ---
+import { createApp } from 'vue'
+import './style.css'
+import App from './App.vue'
+import { clerkPlugin } from '@clerk/vue'
+
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+if (!PUBLISHABLE_KEY) {
+  throw new Error('Add your Clerk Publishable Key to the .env file')
+}
+
+const app = createApp(App)
+app.use(clerkPlugin, { publishableKey: PUBLISHABLE_KEY })
+app.mount('#app')
+
+
+--- .agents/skills/clerk-vue-patterns/templates/vue-basic-auth/vite.config.ts ---
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+
+export default defineConfig({
+  plugins: [vue()],
+})
+
+
+--- web/app/api/audit/export/route.ts ---
+import { badRequest, isUuid, notFound } from "@/app/api/_lib/respond";
+import { listAuditForExport } from "@/lib/server/audit";
+import { requireReviewer } from "@/lib/server/auth";
+import { getRunDetail } from "@/lib/server/runs";
+import { auditDetailLine, auditNote } from "@/lib/audit-detail";
+import { shortRunId } from "@/lib/format";
+import { auditActionSchema, type AuditEntry } from "@/types/resolution";
+
+/**
+ * GET /api/audit/export?runId=&action= — "Export log" in wireframe 1n.
+ *
+ * CSV only. The audit trail is a ledger with four fixed columns and one open
+ * detail column; that is a spreadsheet, and a reviewer asking for the log is
+ * about to put it next to something else in one.
+ *
+ * `detail` goes out twice: once flattened the way the console reads it, and once
+ * as raw JSON. The flattened column is what a person wants; the raw column is
+ * why the file is still evidence if the flattening ever loses something.
+ */
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams;
+
+  const runId = params.get("runId") ?? undefined;
+  if (runId !== undefined && !isUuid(runId)) return notFound("No such run.");
+
+  const rawAction = params.get("action");
+  const action = rawAction ? auditActionSchema.safeParse(rawAction) : null;
+  if (rawAction && !action?.success) return badRequest("Unknown audit action.");
+
+  const run = runId ? await getRunDetail(runId) : null;
+  if (runId && !run) return notFound("No such run.");
+
+  // Reading the trail is itself a thing a person did, so the file records who
+  // pulled it — but it is a read, and reads do not append to an append-only log.
+  await requireReviewer();
+
+  const entries = await listAuditForExport({
+    runId,
+    action: action?.success ? action.data : undefined,
+  });
+
+  const scope = run ? `-run-${shortRunId(run.id).replace("·", "")}` : "";
+
+  return new Response(auditToCsv(entries), {
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="canon-audit${scope}.csv"`,
+      "cache-control": "no-store",
+    },
+  });
+}
+
+const COLUMNS = [
+  "createdAt",
+  "runId",
+  "action",
+  "actor",
+  "resolutionId",
+  "detail",
+  "note",
+  "detailJson",
+] as const;
+
+function auditToCsv(entries: AuditEntry[]): string {
+  const lines = [COLUMNS.join(",")];
+
+  for (const entry of entries) {
+    lines.push(
+      [
+        entry.createdAt.toISOString(),
+        entry.runId,
+        entry.action,
+        entry.actor,
+        entry.resolutionId ?? "",
+        auditDetailLine(entry) ?? "",
+        auditNote(entry) ?? "",
+        JSON.stringify(entry.detail),
+      ]
+        .map(csvCell)
+        .join(","),
+    );
+  }
+
+  return lines.join("\r\n") + "\r\n";
+}
+
+function csvCell(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+
+--- web/app/api/conflicts/route.ts ---
+import { badRequest } from "@/app/api/_lib/respond";
+import { loadQueue } from "@/lib/server/conflicts";
+import { queueQuerySchema } from "@/types/queue";
+
+/**
+ * GET /api/conflicts — the filtered conflict queue.
+ *
+ * The console does not use this: every queue screen is a Server Component and
+ * reads `loadQueue` directly, because a review queue that arrives after a
+ * spinner is a worse review queue. This exists because the queue is the one
+ * read worth having outside the browser — an ops script asking "what is still
+ * escalated on run X" should not have to scrape HTML — and because it is the
+ * documented surface in AGENTS.md § Web Route Handlers.
+ *
+ * Same schema, same loader as the screen, so a filter cannot mean two things.
+ */
+export async function GET(request: Request) {
+  const params = Object.fromEntries(new URL(request.url).searchParams);
+  const parsed = queueQuerySchema.safeParse(params);
+
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message ?? "Invalid query.");
+  }
+
+  const load = await loadQueue(parsed.data);
+  if (load.state === "no-runs") {
+    return Response.json({ run: null, conflicts: [], total: 0, counts: null });
+  }
+
+  return Response.json({
+    run: {
+      id: load.run.id,
+      status: load.run.status,
+      sourceA: load.run.sourceAName,
+      sourceB: load.run.sourceBName,
+      ruleset: `${load.run.rulesetName} v${load.run.rulesetVersion}`,
+    },
+    counts: load.page.counts,
+    total: load.page.total,
+    page: load.page.page,
+    pageCount: load.page.pageCount,
+    conflicts: load.page.rows,
+  });
+}
+
+
+## Instructions
+
+Analyze the above codebase context and provide your response following the format specified in the task.

@@ -1,0 +1,111 @@
+[2026-08-07T17:42:14.744Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \".env\",\n      \"line\": 11,\n      \"description\": \"Hardcoded database credentials in .env file. PostgreSQL connection strings contain plaintext passwords (e.g., 'ArlecchinoxZhongli'). While .env is not in git, credentials should never be hardcoded — use secrets management or environment variable injection.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \".env\",\n      \"line\": 30,\n      \"description\": \"Hardcoded Clerk secret key in .env file (sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf). Even test keys should not be committed to the repo in production setups. Use proper secrets management.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"app/api/runs/[runId]/export/route.ts\",\n      \"line\": 28,\n      \"description\": \"Missing authorization check on export endpoint. Route validates UUID format but does not verify the requesting reviewer has permission to export this specific run. An authenticated user could export any run by knowing/guessing the runId.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"app/api/conflicts/route.ts\",\n      \"line\": 12,\n      \"description\": \"No rate limiting on queue endpoint. GET endpoint can be called unlimited times. If this endpoint is publicly documented (AGENTS.md), an ops script could be exploited for DOS or data scraping.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"app/api/runs/route.ts\",\n      \"line\": 22,\n      \"description\": \"POST /api/runs lacks rate limiting. An attacker could spam run creation requests to exhaust resources or fill the queue. No per-user request throttling visible.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"drizzle.config.ts\",\n      \"line\": 13,\n      \"description\": \"Database connection URL construction uses environment variables without validation. If MIGRATION_DATABASE_URL is missing, DATABASE_URL is used as fallback. Both contain sensitive connection strings that could be logged in error messages.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"lib/db/index.ts\",\n      \"line\": 28,\n      \"description\": \"Error message 'DATABASE_URL is not set' reveals system internals. While it doesn't expose the actual URL, it confirms the expected environment variable name, aiding reconnaissance.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"lib/server/audit.ts\",\n      \"line\": 56,\n      \"description\": \"Audit trail write lacks transaction isolation level specification. Concurrent appends could theoretically produce race conditions, though Postgres defaults should handle this. Explicitly set serializable isolation for critical audit operations.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"app/api/_lib/respond.ts\",\n      \"line\": 42,\n      \"description\": \"Error response includes field-level validation errors mapped to schema paths. While useful for UX, detailed error messages could leak information about internal data structure to attackers performing reconnaissance (e.g., 'config.objects' reveals nested schema).\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"proxy.ts\",\n      \"line\": 12,\n      \"description\": \"Public routes matcher includes sign-in/sign-up paths. While correct, ensure Clerk's built-in CSRF protection is enabled on these routes. If Clerk's protection is misconfigured, sign-in flows could be vulnerable to CSRF.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"lib/api-client.ts\",\n      \"line\": 30,\n      \"description\": \"Fetch requests do not explicitly set X-Requested-With header or other CSRF tokens for added defense-in-depth. Relying solely on SameSite cookies. While modern, older browsers lack support.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"app/api/runs/[runId]/export/route.ts\",\n      \"line\": 14,\n      \"description\": \"Filename construction uses UUID but doesn't validate Content-Disposition header injection. If shortRunId could include unescaped quotes, filename could be manipulated. Current implementation is safe but brittle.\"\n    }\n  ],\n  \"riskScore\": 52,\n  \"recommendations\": [\n    \"CRITICAL: Rotate the Clerk secret key (sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf) and database credentials immediately. These were exposed in the codebase analysis.\",\n    \"CRITICAL: Never commit .env files with secrets. Use a secrets management system (e.g., Vault, AWS Secrets Manager, Supabase vault) or inject environment variables at deployment time.\",\n    \"CRITICAL: Implement per-user authorization checks on all endpoints. The export endpoint should verify the user has permission to access the specific run, not just that they're authenticated.\",\n    \"HIGH: Implement rate limiting on all POST endpoints (/api/runs, /api/sources, /api/rulesets) using middleware or a package like `ratelimit` or `Upstash`. Recommended: 10-50 requests per minute per user.\",\n    \"HIGH: Implement rate limiting on GET endpoints (/api/conflicts, /api/runs) to prevent DOS and data scraping: 100-500 requests per minute per user.\",\n    \"MEDIUM: Add Content Security Policy (CSP) headers to next.config.ts: `default-src 'self'`, `script-src 'self' 'nonce-*'`, `object-src 'none'`, `base-uri 'self'`.\",\n    \"MEDIUM: Add security headers middleware: X-Content-Type-Options: nosniff, X-Frame-Options: DENY, X-XSS-Protection: 1; mode=block, Strict-Transport-Security: max-age=31536000.\",\n    \"MEDIUM: Implement audit logging for failed authentication attempts, unauthorized access attempts, and security-relevant actions (e.g., failed rate limits).\",\n    \"MEDIUM: Review Clerk's CSRF protection configuration in proxy.ts. Verify SameSite=Strict is set on all session cookies.\",\n    \"MEDIUM: Set explicit transaction isolation to SERIALIZABLE for audit_log inserts to prevent race conditions in mission-critical audit trail.\",\n    \"MEDIUM: Add explicit input size limits to parseJson() function — limit JSON payload to 1MB to prevent DOS attacks.\",\n    \"MEDIUM: Implement RBAC (role-based access control) to restrict who can create runs, export data, and modify rulesets. Current auth only checks if authenticated, not role.\",\n    \"LOW: Replace generic error message 'No such run' with 404 response to prevent user enumeration attacks. Always return 404 for both missing and unauthorized resources.\",\n    \"LOW: Add OWASP rate limiting response headers (X-RateLimit-*) to help clients respect throttling: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset.\",\n    \"LOW: Validate audit detail fields more strictly. Currently accepts any JSON; add schema validation for detail objects to prevent injection attacks.\",\n    \"LOW: Add security.txt file at /.well-known/security.txt with security contact information and vulnerability disclosure policy.\",\n    \"LOW: Set Content-Disposition filename encoding (RFC 5987) for export endpoint to handle special characters safely: `filename*=UTF-8''canon-run-...`.\",\n    \"PROCESS: Implement a secrets scanning tool in CI/CD pipeline (e.g., TruffleHog, GitGuardian) to prevent accidental credential commits.\",\n    \"PROCESS: Add pre-commit hook to scan for hardcoded secrets using `detect-secrets` or similar tool.\",\n    \"PROCESS: Rotate all exposed test credentials (Clerk secret, database password) even though they're test environment keys — they may be reused or grant access to shared dev resources.\"\n  ]\n}\n```\n\n## Key Findings\n\n**Critical Issues:**\n1. **Hardcoded secrets in .env** — Database passwords and Clerk secret keys are exposed\n2. **Missing per-resource authorization** — Users can access/export runs they shouldn't have access to\n3. **No rate limiting** — API endpoints vulnerable to DOS and data scraping\n\n**Positive Security Practices:**\n✅ Schema validation on all inputs (Zod)  \n✅ Audit-first design with immutable audit trail  \n✅ Server-side actor recording (never client-supplied)  \n✅ Proper authentication via Clerk middleware  \n✅ Database credentials never exposed to browser  \n✅ No SQL injection vulnerabilities (Drizzle ORM with parameterized queries)\n\n**Report saved to scratchpad** for your reference and follow-up actions.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "high",
+        "file": ".env",
+        "line": 11,
+        "description": "Hardcoded database credentials in .env file. PostgreSQL connection strings contain plaintext passwords (e.g., 'ArlecchinoxZhongli'). While .env is not in git, credentials should never be hardcoded — use secrets management or environment variable injection."
+      },
+      {
+        "severity": "high",
+        "file": ".env",
+        "line": 30,
+        "description": "Hardcoded Clerk secret key in .env file (sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf). Even test keys should not be committed to the repo in production setups. Use proper secrets management."
+      },
+      {
+        "severity": "medium",
+        "file": "app/api/runs/[runId]/export/route.ts",
+        "line": 28,
+        "description": "Missing authorization check on export endpoint. Route validates UUID format but does not verify the requesting reviewer has permission to export this specific run. An authenticated user could export any run by knowing/guessing the runId."
+      },
+      {
+        "severity": "medium",
+        "file": "app/api/conflicts/route.ts",
+        "line": 12,
+        "description": "No rate limiting on queue endpoint. GET endpoint can be called unlimited times. If this endpoint is publicly documented (AGENTS.md), an ops script could be exploited for DOS or data scraping."
+      },
+      {
+        "severity": "medium",
+        "file": "app/api/runs/route.ts",
+        "line": 22,
+        "description": "POST /api/runs lacks rate limiting. An attacker could spam run creation requests to exhaust resources or fill the queue. No per-user request throttling visible."
+      },
+      {
+        "severity": "medium",
+        "file": "drizzle.config.ts",
+        "line": 13,
+        "description": "Database connection URL construction uses environment variables without validation. If MIGRATION_DATABASE_URL is missing, DATABASE_URL is used as fallback. Both contain sensitive connection strings that could be logged in error messages."
+      },
+      {
+        "severity": "medium",
+        "file": "lib/db/index.ts",
+        "line": 28,
+        "description": "Error message 'DATABASE_URL is not set' reveals system internals. While it doesn't expose the actual URL, it confirms the expected environment variable name, aiding reconnaissance."
+      },
+      {
+        "severity": "medium",
+        "file": "lib/server/audit.ts",
+        "line": 56,
+        "description": "Audit trail write lacks transaction isolation level specification. Concurrent appends could theoretically produce race conditions, though Postgres defaults should handle this. Explicitly set serializable isolation for critical audit operations."
+      },
+      {
+        "severity": "low",
+        "file": "app/api/_lib/respond.ts",
+        "line": 42,
+        "description": "Error response includes field-level validation errors mapped to schema paths. While useful for UX, detailed error messages could leak information about internal data structure to attackers performing reconnaissance (e.g., 'config.objects' reveals nested schema)."
+      },
+      {
+        "severity": "low",
+        "file": "proxy.ts",
+        "line": 12,
+        "description": "Public routes matcher includes sign-in/sign-up paths. While correct, ensure Clerk's built-in CSRF protection is enabled on these routes. If Clerk's protection is misconfigured, sign-in flows could be vulnerable to CSRF."
+      },
+      {
+        "severity": "low",
+        "file": "lib/api-client.ts",
+        "line": 30,
+        "description": "Fetch requests do not explicitly set X-Requested-With header or other CSRF tokens for added defense-in-depth. Relying solely on SameSite cookies. While modern, older browsers lack support."
+      },
+      {
+        "severity": "low",
+        "file": "app/api/runs/[runId]/export/route.ts",
+        "line": 14,
+        "description": "Filename construction uses UUID but doesn't validate Content-Disposition header injection. If shortRunId could include unescaped quotes, filename could be manipulated. Current implementation is safe but brittle."
+      }
+    ],
+    "riskScore": 52,
+    "recommendations": [
+      "CRITICAL: Rotate the Clerk secret key (sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf) and database credentials immediately. These were exposed in the codebase analysis.",
+      "CRITICAL: Never commit .env files with secrets. Use a secrets management system (e.g., Vault, AWS Secrets Manager, Supabase vault) or inject environment variables at deployment time.",
+      "CRITICAL: Implement per-user authorization checks on all endpoints. The export endpoint should verify the user has permission to access the specific run, not just that they're authenticated.",
+      "HIGH: Implement rate limiting on all POST endpoints (/api/runs, /api/sources, /api/rulesets) using middleware or a package like `ratelimit` or `Upstash`. Recommended: 10-50 requests per minute per user.",
+      "HIGH: Implement rate limiting on GET endpoints (/api/conflicts, /api/runs) to prevent DOS and data scraping: 100-500 requests per minute per user.",
+      "MEDIUM: Add Content Security Policy (CSP) headers to next.config.ts: `default-src 'self'`, `script-src 'self' 'nonce-*'`, `object-src 'none'`, `base-uri 'self'`.",
+      "MEDIUM: Add security headers middleware: X-Content-Type-Options: nosniff, X-Frame-Options: DENY, X-XSS-Protection: 1; mode=block, Strict-Transport-Security: max-age=31536000.",
+      "MEDIUM: Implement audit logging for failed authentication attempts, unauthorized access attempts, and security-relevant actions (e.g., failed rate limits).",
+      "MEDIUM: Review Clerk's CSRF protection configuration in proxy.ts. Verify SameSite=Strict is set on all session cookies.",
+      "MEDIUM: Set explicit transaction isolation to SERIALIZABLE for audit_log inserts to prevent race conditions in mission-critical audit trail.",
+      "MEDIUM: Add explicit input size limits to parseJson() function — limit JSON payload to 1MB to prevent DOS attacks.",
+      "MEDIUM: Implement RBAC (role-based access control) to restrict who can create runs, export data, and modify rulesets. Current auth only checks if authenticated, not role.",
+      "LOW: Replace generic error message 'No such run' with 404 response to prevent user enumeration attacks. Always return 404 for both missing and unauthorized resources.",
+      "LOW: Add OWASP rate limiting response headers (X-RateLimit-*) to help clients respect throttling: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset.",
+      "LOW: Validate audit detail fields more strictly. Currently accepts any JSON; add schema validation for detail objects to prevent injection attacks.",
+      "LOW: Add security.txt file at /.well-known/security.txt with security contact information and vulnerability disclosure policy.",
+      "LOW: Set Content-Disposition filename encoding (RFC 5987) for export endpoint to handle special characters safely: `filename*=UTF-8''canon-run-...`.",
+      "PROCESS: Implement a secrets scanning tool in CI/CD pipeline (e.g., TruffleHog, GitGuardian) to prevent accidental credential commits.",
+      "PROCESS: Add pre-commit hook to scan for hardcoded secrets using `detect-secrets` or similar tool.",
+      "PROCESS: Rotate all exposed test credentials (Clerk secret, database password) even though they're test environment keys — they may be reused or grant access to shared dev resources."
+    ]
+  },
+  "durationMs": 101210,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-07T17:42:14.744Z",
+  "executionId": "audit_1786124433534_x9x650"
+}

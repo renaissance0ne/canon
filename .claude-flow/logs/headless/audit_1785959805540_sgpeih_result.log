@@ -1,0 +1,45 @@
+[2026-08-05T19:57:23.571Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Looking at the provided codebase context, I'll analyze the security posture:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/app/api/runs/[runId]/export/route.ts\",\n      \"line\": 45,\n      \"description\": \"CSV injection risk: The decisionsToCsv() function is called without visible escaping. If CSV contains formulas (e.g., rationale starting with '=', '@', '+'), Excel/Google Sheets will interpret them as commands. User-controlled data must be escaped before CSV output.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/app/api/_lib/respond.ts\",\n      \"line\": 51,\n      \"description\": \"Information disclosure via validation errors: fieldIssues() returns detailed error paths and messages that could reveal schema structure to attackers. Consider generalizing error messages in production.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 11,\n      \"description\": \"No verification that environment variables containing DATABASE_URL are actually kept server-side. If .env is accidentally committed or .env.local is shared, credentials leak. Ensure .env files are in .gitignore.\"\n    }\n  ],\n  \"riskScore\": 18,\n  \"recommendations\": [\n    \"Add CSV escaping to decisionsToCsv(): prepend '\\\\t' to values starting with '=', '@', '+', or '-' to prevent formula injection in exported files.\",\n    \"Validate that isUuid() function (imported but not shown) properly rejects malformed UUIDs and does not allow bypass via type coercion.\",\n    \"Add request body size limits to all POST endpoints to prevent unbounded memory attacks (e.g., `bodyParser.json({ limit: '10kb' })` in Next.js).\",\n    \"Implement rate limiting on /api/runs and /api/sources endpoints to prevent brute-force attacks on run creation.\",\n    \"Audit the engine's db.py to ensure it never writes to sources or rulesets tables (respect table ownership contract defined in AGENTS.md).\",\n    \"Verify that all Client Components import from lib/server/ are properly marked 'use server' and never ship secrets to the browser.\",\n    \"Enable CORS headers explicitly if the API must be called from external origins; otherwise ensure responses include appropriate cross-origin restrictions.\",\n    \"Review engine/.env structure to confirm all secrets (ANTHROPIC_API_KEY, connector credentials) are environment variables, never embedded in code.\"\n  ]\n}\n```\n\n**Summary:** The codebase follows strong security patterns—Zod validation on all routes, proper authorization checks, secrets kept in environment variables, and use of Drizzle ORM to prevent SQL injection. No hardcoded credentials or obvious authentication bypasses were found. The main remaining risks are operational (CSV injection in exports, rate limiting) rather than architectural. The security architecture documented in AGENTS.md is sound and appears to be followed.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "low",
+        "file": "web/app/api/runs/[runId]/export/route.ts",
+        "line": 45,
+        "description": "CSV injection risk: The decisionsToCsv() function is called without visible escaping. If CSV contains formulas (e.g., rationale starting with '=', '@', '+'), Excel/Google Sheets will interpret them as commands. User-controlled data must be escaped before CSV output."
+      },
+      {
+        "severity": "low",
+        "file": "web/app/api/_lib/respond.ts",
+        "line": 51,
+        "description": "Information disclosure via validation errors: fieldIssues() returns detailed error paths and messages that could reveal schema structure to attackers. Consider generalizing error messages in production."
+      },
+      {
+        "severity": "low",
+        "file": "web/drizzle.config.ts",
+        "line": 11,
+        "description": "No verification that environment variables containing DATABASE_URL are actually kept server-side. If .env is accidentally committed or .env.local is shared, credentials leak. Ensure .env files are in .gitignore."
+      }
+    ],
+    "riskScore": 18,
+    "recommendations": [
+      "Add CSV escaping to decisionsToCsv(): prepend '\\t' to values starting with '=', '@', '+', or '-' to prevent formula injection in exported files.",
+      "Validate that isUuid() function (imported but not shown) properly rejects malformed UUIDs and does not allow bypass via type coercion.",
+      "Add request body size limits to all POST endpoints to prevent unbounded memory attacks (e.g., `bodyParser.json({ limit: '10kb' })` in Next.js).",
+      "Implement rate limiting on /api/runs and /api/sources endpoints to prevent brute-force attacks on run creation.",
+      "Audit the engine's db.py to ensure it never writes to sources or rulesets tables (respect table ownership contract defined in AGENTS.md).",
+      "Verify that all Client Components import from lib/server/ are properly marked 'use server' and never ship secrets to the browser.",
+      "Enable CORS headers explicitly if the API must be called from external origins; otherwise ensure responses include appropriate cross-origin restrictions.",
+      "Review engine/.env structure to confirm all secrets (ANTHROPIC_API_KEY, connector credentials) are environment variables, never embedded in code."
+    ]
+  },
+  "durationMs": 38031,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T19:57:23.571Z",
+  "executionId": "audit_1785959805540_sgpeih"
+}

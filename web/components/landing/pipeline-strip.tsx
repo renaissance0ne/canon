@@ -20,7 +20,9 @@ export function PipelineStrip() {
       {STAGES.map((stage, i) => (
         <motion.li
           key={stage.n}
-          initial={{ opacity: 0, y: reduced ? 0 : 6 }}
+          // Constant initial — see MotionProvider. Only the stagger delay is
+          // branched, and transition never reaches the server-rendered markup.
+          initial={{ opacity: 0, y: 6 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.12, delay: reduced ? 0 : i * 0.02, ease: [0.2, 0, 0.2, 1] }}

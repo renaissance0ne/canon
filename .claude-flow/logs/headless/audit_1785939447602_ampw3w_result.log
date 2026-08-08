@@ -1,0 +1,47 @@
+[2026-08-05T14:17:57.122Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/lib/db/index.ts\",\n      \"line\": 29,\n      \"description\": \"Prepared statements disabled with `{ prepare: false }`. While Drizzle ORM provides parameterized query protection, disabling prepared statements reduces the database's ability to prevent SQL injection at the driver level. This is noted as intentional for Supabase transaction pooler compatibility, but represents a security tradeoff.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 12,\n      \"description\": \"Database URL required before migration; error thrown at build time. No runtime validation that DATABASE_URL/MIGRATION_DATABASE_URL doesn't contain embedded credentials (e.g., postgres://user:password@host). Environment variables should be validated to prevent credential leakage in logs.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \".agents/skills/clerk-backend-api/scripts/extract-tags.js\",\n      \"line\": 6,\n      \"description\": \"Regex pattern matching on user-supplied input without length validation. While the regex is restrictive, unbounded input could cause ReDoS (regular expression denial of service) in edge cases.\"\n    }\n  ],\n  \"riskScore\": 18,\n  \"recommendations\": [\n    \"Add explicit validation in database connection code to ensure connection strings do not contain embedded credentials; log connection attempts without credentials\",\n    \"Implement Content Security Policy headers on all routes to prevent XSS and injection attacks\",\n    \"Ensure all route handlers (not shown in provided snippets) validate input with Zod schemas as stated in CLAUDE.md § TypeScript Rules\",\n    \"Add rate limiting middleware on authentication routes (/api/auth/*) to prevent brute-force attacks\",\n    \"Verify CORS headers are properly configured to restrict cross-origin requests to intended domains only\",\n    \"For the extract-tags.js utility, add input length limits to prevent potential ReDoS attacks\",\n    \"Add CSRF token validation to all state-changing POST/PATCH/DELETE endpoints\",\n    \"Ensure audit_log writes are immutable and cannot be modified after creation (verify in schema constraints)\",\n    \"Implement request signing or authentication tokens on the Engine ↔ Web API boundary (POST /api/runs → engine)\",\n    \"Document and enforce that engine credentials (ANTHROPIC_API_KEY, Salesforce, Databricks tokens) are never accessible from web layer\"\n  ]\n}\n```\n\n**Key Findings:**\n\n✅ **Well-Implemented:**\n- Proper `server-only` markers prevent database credentials from reaching client bundles\n- Environment variable management follows best practices (no `NEXT_PUBLIC_` secrets)\n- Clerk authentication properly configured with secure defaults\n- Drizzle ORM provides parameterized query protection against SQL injection\n- Table ownership model enforces reproducibility and audit trail integrity\n\n⚠️ **To Verify (Not Shown):**\n- All route handlers must implement Zod validation (stated but not provided in snippets)\n- Missing CSRF, CORS, and CSP headers in the actual route implementations\n- No rate limiting visible on sensitive endpoints\n- Engine API boundary authentication mechanism\n\nThe codebase demonstrates security-conscious design patterns, but a complete audit requires reviewing the actual route handler implementations and HTTP middleware configuration.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "medium",
+        "file": "web/lib/db/index.ts",
+        "line": 29,
+        "description": "Prepared statements disabled with `{ prepare: false }`. While Drizzle ORM provides parameterized query protection, disabling prepared statements reduces the database's ability to prevent SQL injection at the driver level. This is noted as intentional for Supabase transaction pooler compatibility, but represents a security tradeoff."
+      },
+      {
+        "severity": "medium",
+        "file": "web/drizzle.config.ts",
+        "line": 12,
+        "description": "Database URL required before migration; error thrown at build time. No runtime validation that DATABASE_URL/MIGRATION_DATABASE_URL doesn't contain embedded credentials (e.g., postgres://user:password@host). Environment variables should be validated to prevent credential leakage in logs."
+      },
+      {
+        "severity": "low",
+        "file": ".agents/skills/clerk-backend-api/scripts/extract-tags.js",
+        "line": 6,
+        "description": "Regex pattern matching on user-supplied input without length validation. While the regex is restrictive, unbounded input could cause ReDoS (regular expression denial of service) in edge cases."
+      }
+    ],
+    "riskScore": 18,
+    "recommendations": [
+      "Add explicit validation in database connection code to ensure connection strings do not contain embedded credentials; log connection attempts without credentials",
+      "Implement Content Security Policy headers on all routes to prevent XSS and injection attacks",
+      "Ensure all route handlers (not shown in provided snippets) validate input with Zod schemas as stated in CLAUDE.md § TypeScript Rules",
+      "Add rate limiting middleware on authentication routes (/api/auth/*) to prevent brute-force attacks",
+      "Verify CORS headers are properly configured to restrict cross-origin requests to intended domains only",
+      "For the extract-tags.js utility, add input length limits to prevent potential ReDoS attacks",
+      "Add CSRF token validation to all state-changing POST/PATCH/DELETE endpoints",
+      "Ensure audit_log writes are immutable and cannot be modified after creation (verify in schema constraints)",
+      "Implement request signing or authentication tokens on the Engine ↔ Web API boundary (POST /api/runs → engine)",
+      "Document and enforce that engine credentials (ANTHROPIC_API_KEY, Salesforce, Databricks tokens) are never accessible from web layer"
+    ]
+  },
+  "durationMs": 29520,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T14:17:57.122Z",
+  "executionId": "audit_1785939447602_ampw3w"
+}

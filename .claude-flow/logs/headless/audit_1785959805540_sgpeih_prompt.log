@@ -1,0 +1,515 @@
+[2026-08-05T19:56:45.607Z] PROMPT
+============================================================
+Analyze this codebase for security vulnerabilities:
+- Check for hardcoded secrets (API keys, passwords)
+- Identify SQL injection risks
+- Find XSS vulnerabilities
+- Check for insecure dependencies
+- Identify authentication/authorization issues
+
+Provide a JSON report with:
+{
+  "vulnerabilities": [{ "severity": "high|medium|low", "file": "...", "line": N, "description": "..." }],
+  "riskScore": 0-100,
+  "recommendations": ["..."]
+}
+
+## Codebase Context
+
+--- .agents/skills/clerk-backend-api/scripts/extract-tags.js ---
+let input = "";
+process.stdin.on("data", d => input += d);
+process.stdin.on("end", () => {
+  const lines = input.replace(/\r/g, "").split("\n");
+  let inTags = false;
+  for (const line of lines) {
+    if (line === "tags:") { inTags = true; continue; }
+    if (inTags && line.length > 0 && line[0] !== " ") break;
+    if (inTags) {
+      const m = line.match(/^\s{2}- name:\s*(.+)/);
+      if (m) console.log(m[1]);
+    }
+  }
+});
+
+
+--- .agents/skills/clerk-astro-patterns/templates/astro-basic-auth/src/middleware.ts ---
+import { clerkMiddleware } from "@clerk/astro/server"
+
+export const onRequest = clerkMiddleware()
+
+
+--- .agents/skills/clerk-nextjs-patterns/templates/nextjs-basic-auth/proxy.ts ---
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware()
+
+export const config = {
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/(api|trpc)(.*)',
+  ],
+}
+
+
+--- .agents/skills/clerk-nuxt-patterns/templates/nuxt-basic-auth/nuxt.config.ts ---
+export default defineNuxtConfig({
+  modules: ['@clerk/nuxt'],
+})
+
+
+--- .agents/skills/clerk-react-patterns/templates/react-basic-auth/vite.config.ts ---
+import react from "@vitejs/plugin-react"
+import { defineConfig } from "vite"
+
+export default defineConfig({
+	plugins: [react()],
+})
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/app/routes.ts ---
+import { type RouteConfig, index } from "@react-router/dev/routes"
+
+export default [index("routes/home.tsx")] satisfies RouteConfig
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/react-router.config.ts ---
+import type { Config } from '@react-router/dev/config'
+
+export default {
+  ssr: true,
+} satisfies Config
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/vite.config.ts ---
+import { reactRouter } from "@react-router/dev/vite"
+import { defineConfig } from "vite"
+
+export default defineConfig({
+	plugins: [reactRouter()],
+	// React Router v8 dev SSR externalizes @clerk/react-router, which then resolves
+	// react-router's production build while the app uses the development build —
+	// two Router contexts, and useNavigate() throws inside ClerkProvider.
+	// See https://github.com/remix-run/react-router/issues/15232
+	ssr: {
+		noExternal: ["@clerk/react-router"],
+	},
+})
+
+
+--- .agents/skills/clerk-tanstack-patterns/templates/tanstack-basic-auth/src/start.ts ---
+import { clerkMiddleware } from '@clerk/tanstack-react-start/server';
+import { createStart } from '@tanstack/react-start';
+
+export const startInstance = createStart(() => {
+  return {
+    requestMiddleware: [clerkMiddleware()],
+  };
+});
+
+
+--- .agents/skills/clerk-tanstack-patterns/templates/tanstack-basic-auth/vite.config.ts ---
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { defineConfig } from 'vite'
+import tsConfigPaths from 'vite-tsconfig-paths'
+import viteReact from '@vitejs/plugin-react'
+
+export default defineConfig({
+  server: {
+    port: 3000,
+  },
+  plugins: [
+    tsConfigPaths({
+      projects: ['./tsconfig.json'],
+    }),
+    tanstackStart(),
+    viteReact(),
+  ],
+})
+
+
+--- .agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts ---
+import { createApp } from 'vue'
+import './style.css'
+import App from './App.vue'
+import { clerkPlugin } from '@clerk/vue'
+
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+if (!PUBLISHABLE_KEY) {
+  throw new Error('Add your Clerk Publishable Key to the .env file')
+}
+
+const app = createApp(App)
+app.use(clerkPlugin, { publishableKey: PUBLISHABLE_KEY })
+app.mount('#app')
+
+
+--- .agents/skills/clerk-vue-patterns/templates/vue-basic-auth/vite.config.ts ---
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+
+export default defineConfig({
+  plugins: [vue()],
+})
+
+
+--- web/app/api/rulesets/route.ts ---
+import { parseJson } from "@/app/api/_lib/respond";
+import { createRulesetVersion, listRulesets } from "@/lib/server/rulesets";
+import { createRulesetSchema } from "@/types/rules";
+
+/**
+ * Wireframe 1d — the survivorship policy.
+ *
+ * POST creates a NEW VERSION. There is no PATCH and there will not be one: a
+ * run records the `rulesetId` it executed under, so mutable rules would make
+ * every past run unreproducible and turn the audit trail into a lie. "Save as
+ * v4" is the only way to change policy, and v3 stays readable forever.
+ */
+
+export async function GET() {
+  return Response.json({ rulesets: await listRulesets() });
+}
+
+export async function POST(request: Request) {
+  const parsed = await parseJson(request, createRulesetSchema);
+  if (!parsed.ok) return parsed.response;
+
+  const ruleset = await createRulesetVersion(parsed.data);
+  return Response.json({ ruleset }, { status: 201 });
+}
+
+
+--- web/app/api/runs/route.ts ---
+import { badRequest, parseJson } from "@/app/api/_lib/respond";
+import { requireReviewer } from "@/lib/server/auth";
+import { appendAudit } from "@/lib/server/audit";
+import { EngineUnreachableError, startRun } from "@/lib/server/engine";
+import { createRun, failUndispatchedRun, listRuns } from "@/lib/server/runs";
+import { getRuleset } from "@/lib/server/rulesets";
+import { findSourceIds } from "@/lib/server/sources";
+import { createRunSchema } from "@/types/run";
+
+/**
+ * Wireframe 1e — POST /api/runs.
+ *
+ * Returns { runId } immediately and never blocks on the pipeline. The run row
+ * is inserted `queued`, the engine is handed the id, and the console polls
+ * /api/runs/:runId/status from there.
+ */
+
+export async function GET() {
+  return Response.json({ runs: await listRuns() });
+}
+
+export async function POST(request: Request) {
+  const parsed = await parseJson(request, createRunSchema);
+  if (!parsed.ok) return parsed.response;
+
+  const { sourceAId, sourceBId, rulesetId } = parsed.data;
+
+  // Reconciling a source against itself would produce a perfect, meaningless
+  // run: every entity matches itself and nothing ever disagrees.
+  if (sourceAId === sourceBId) {
+    return badRequest("Source A and Source B must be different systems.");
+  }
+
+  // The FKs would catch a missing id, but as a 500 with a constraint name in
+  // it. The operator picked these from a dropdown; if one has since been
+  // deleted, say so.
+  const [found, ruleset] = await Promise.all([
+    findSourceIds([sourceAId, sourceBId]),
+    getRuleset(rulesetId),
+  ]);
+  if (!found.has(sourceAId)) return badRequest("Source A no longer exists.");
+  if (!found.has(sourceBId)) return badRequest("Source B no longer exists.");
+  if (!ruleset) return badRequest("That ruleset version no longer exists.");
+
+  // Who started this. `actor` is resolved from the session, never from the
+  // request body — an audit trail whose actor is whatever the client sent is
+  // not an audit trail.
+  const reviewer = await requireReviewer();
+
+  const run = await createRun(parsed.data);
+
+  await appendAudit({
+    runId: run.id,
+    action: "run_started",
+    actor: reviewer.label,
+    detail: {
+      sourceAId,
+      sourceBId,
+      rulesetId,
+      rulesetName: ruleset.name,
+      rulesetVersion: ruleset.version,
+    },
+  });
+
+  try {
+    await startRun(run.id);
+  } catch (cause) {
+    if (!(cause instanceof EngineUnreachableError)) throw cause;
+
+    // The run exists and the engine never took it. Record that ON THE ROW —
+    // wireframe 1h is a state, not a toast, and it has to survive a reload.
+    // The response is still 201: the run is real, it is just already failed,
+    // and the console navigates to it and shows why.
+    //
+    // `stage=` follows the engine's own error convention so the failed-run
+    // screen can highlight where it died without a second field on the row.
+    await failUndispatchedRun(run.id, `EngineDispatch: ${cause.message}\nstage=dispatch`);
+    await appendAudit({
+      runId: run.id,
+      action: "run_failed",
+      actor: "web",
+      detail: { stage: "dispatch", error: cause.message },
+    });
+  }
+
+  return Response.json({ runId: run.id }, { status: 201 });
+}
+
+
+--- web/app/api/runs/[runId]/export/route.ts ---
+import { badRequest, isUuid, notFound } from "@/app/api/_lib/respond";
+import { requireReviewer } from "@/lib/server/auth";
+import { buildRunExport, decisionsToCsv } from "@/lib/server/export";
+import { getRunDetail } from "@/lib/server/runs";
+import { shortRunId } from "@/lib/format";
+
+/**
+ * GET /api/runs/:runId/export?format=json|csv — wireframe 1g.
+ *
+ * JSON carries both halves: the resolved hierarchy and the full decision log.
+ * CSV carries the decision log only, because two row shapes in one CSV is a
+ * file nobody can pivot.
+ */
+export async function GET(request: Request, ctx: RouteContext<"/api/runs/[runId]/export">) {
+  const { runId } = await ctx.params;
+  if (!isUuid(runId)) return notFound("No such run.");
+
+  const format = new URL(request.url).searchParams.get("format") ?? "json";
+  if (format !== "json" && format !== "csv") {
+    return badRequest("format must be json or csv.");
+  }
+
+  const run = await getRunDetail(runId);
+  if (!run) return notFound("No such run.");
+
+  // Recorded in the file itself. An export that circulates without saying who
+  // pulled it and when is the kind of artefact this whole system exists to
+  // replace.
+  const reviewer = await requireReviewer();
+  const payload = await buildRunExport(run, reviewer.label);
+  const filename = `canon-run-${shortRunId(run.id).replace("·", "")}`;
+
+  if (format === "csv") {
+    return new Response(decisionsToCsv(payload.decisions), {
+      headers: {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="${filename}-decisions.csv"`,
+        "cache-control": "no-store",
+      },
+    });
+  }
+
+  return new Response(JSON.stringify(payload, null, 2), {
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "content-disposition": `attachment; filename="${filename}.json"`,
+      "cache-control": "no-store",
+    },
+  });
+}
+
+
+--- web/app/api/runs/[runId]/route.ts ---
+import { isUuid, notFound } from "@/app/api/_lib/respond";
+import { getRunDetail } from "@/lib/server/runs";
+
+/** GET /api/runs/:runId — the run row, with the two sources and the policy version resolved. */
+export async function GET(_request: Request, ctx: RouteContext<"/api/runs/[runId]">) {
+  const { runId } = await ctx.params;
+  if (!isUuid(runId)) return notFound("No such run.");
+
+  const run = await getRunDetail(runId);
+  return run ? Response.json({ run }) : notFound("No such run.");
+}
+
+
+--- web/app/api/runs/[runId]/status/route.ts ---
+import { isUuid, notFound } from "@/app/api/_lib/respond";
+import { fetchEngineStatus } from "@/lib/server/engine";
+import { getRun } from "@/lib/server/runs";
+import { isTerminalRunStatus, type EngineRunStatus } from "@/types/run";
+
+/**
+ * GET /api/runs/:runId/status — the only polled surface in the console.
+ *
+ * Proxied rather than called from the browser: ENGINE_URL is server-side and
+ * the engine has no session of its own.
+ *
+ * The engine is the freshest source of status, but it is NOT the system of
+ * record — it advances `runs.status` in Postgres as each stage completes. So
+ * this route prefers the engine and falls back to the row, which means a
+ * restarted or briefly unreachable engine degrades a live run to a slightly
+ * stale number instead of an error banner. A terminal run skips the engine
+ * entirely; there is nothing left for it to say.
+ */
+export async function GET(_request: Request, ctx: RouteContext<"/api/runs/[runId]/status">) {
+  const { runId } = await ctx.params;
+  if (!isUuid(runId)) return notFound("No such run.");
+
+  const run = await getRun(runId);
+  if (!run) return notFound("No such run.");
+
+  const fromRow: EngineRunStatus = {
+    runId: run.id,
+    status: run.status,
+    stats: run.stats,
+    error: run.error,
+  };
+
+  if (isTerminalRunStatus(run.status)) return json(fromRow);
+
+  const live = await fetchEngineStatus(runId);
+  return json(live ?? fromRow);
+}
+
+function json(status: EngineRunStatus): Response {
+  return Response.json(status, {
+    // Polled. A cached status is a status that never changes.
+    headers: { "cache-control": "no-store" },
+  });
+}
+
+
+--- web/app/api/sources/route.ts ---
+import { parseJson } from "@/app/api/_lib/respond";
+import { createSource, listSources } from "@/lib/server/sources";
+import { createSourceSchema } from "@/types/source";
+
+/**
+ * Wireframe 1c — POST /api/sources.
+ *
+ * `sources` is web-owned. The engine reads this table to learn what to connect
+ * to and must never write it.
+ *
+ * Nothing secret is stored here: `createSourceSchema` accepts a name, a kind
+ * and a non-secret config shape, and there is no field a credential could
+ * travel in. Connection secrets live in the engine's environment keyed by
+ * `kind` (AGENTS.md § Security Rules).
+ *
+ * The session requirement is enforced by proxy.ts, which matches /api/*.
+ */
+
+export async function GET() {
+  return Response.json({ sources: await listSources() });
+}
+
+export async function POST(request: Request) {
+  const parsed = await parseJson(request, createSourceSchema);
+  if (!parsed.ok) return parsed.response;
+
+  const source = await createSource(parsed.data);
+  return Response.json({ source }, { status: 201 });
+}
+
+
+--- web/app/api/_lib/respond.ts ---
+import "server-only";
+import type { ZodType } from "zod";
+
+export { isUuid } from "@/lib/uuid";
+
+/**
+ * Shared route-handler plumbing.
+ *
+ * AGENTS.md: every route handler validates its body with Zod before touching
+ * the database, no exceptions. This file is what makes that one line at each
+ * call site instead of eight, so there is no incentive to skip it.
+ */
+
+export type Parsed<T> = { ok: true; data: T } | { ok: false; response: Response };
+
+/** Parse and validate a JSON body. On failure the caller returns `response`. */
+export async function parseJson<T>(
+  request: Request,
+  schema: ZodType<T>,
+): Promise<Parsed<T>> {
+  let body: unknown;
+
+  try {
+    body = await request.json();
+  } catch {
+    return { ok: false, response: badRequest("Body must be JSON.") };
+  }
+
+  const result = schema.safeParse(body);
+  if (!result.success) {
+    return {
+      ok: false,
+      response: Response.json(
+        { error: "Invalid request body.", issues: fieldIssues(result.error.issues) },
+        { status: 400 },
+      ),
+    };
+  }
+
+  return { ok: true, data: result.data };
+}
+
+type Issue = { path: PropertyKey[]; message: string };
+
+/** `{ "config.objects": "..." }` — addressable by the form field that caused it. */
+function fieldIssues(issues: readonly Issue[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const issue of issues) {
+    out[issue.path.map(String).join(".") || "_"] = issue.message;
+  }
+  return out;
+}
+
+export function badRequest(error: string): Response {
+  return Response.json({ error }, { status: 400 });
+}
+
+export function notFound(error: string): Response {
+  return Response.json({ error }, { status: 404 });
+}
+
+
+--- web/drizzle.config.ts ---
+import { defineConfig } from "drizzle-kit";
+
+/**
+ * Drizzle owns the schema for BOTH layers. The engine reads and writes the
+ * same Postgres but never migrates it — `npx drizzle-kit generate` and
+ * `npx drizzle-kit migrate` are run from web/ only.
+ */
+/**
+ * Migrations run over a SESSION-mode connection, not the transaction pooler the
+ * app uses at runtime: drizzle-kit issues DDL and introspection with prepared
+ * statements, and Supavisor transaction mode (port 6543) cannot serve those.
+ * Falls back to DATABASE_URL so a direct-connection setup still works unchanged.
+ */
+const migrationUrl = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
+
+if (!migrationUrl) {
+  throw new Error("Set MIGRATION_DATABASE_URL (or DATABASE_URL) in web/.env before migrating.");
+}
+
+export default defineConfig({
+  dialect: "postgresql",
+  schema: "./lib/db/schema.ts",
+  out: "./drizzle",
+  dbCredentials: { url: migrationUrl },
+  strict: true,
+  verbose: true,
+});
+
+
+## Instructions
+
+Analyze the above codebase context and provide your response following the format specified in the task.

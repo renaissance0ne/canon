@@ -1,0 +1,50 @@
+[2026-08-07T17:30:33.522Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Based on my analysis of your codebase, I've identified several security concerns. Here's my comprehensive report:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"medium\",\n      \"file\": \"lib/server/export.ts\",\n      \"line\": 261,\n      \"description\": \"CSV Injection vulnerability: csvCell() does not escape formula injection characters (=, +, -, @) that can trigger formula execution in spreadsheet applications. User-supplied data like conflict values or rationale could start with these characters and execute formulas when the CSV is opened in Excel/Google Sheets.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"lib/server/engine.ts\",\n      \"line\": 94,\n      \"description\": \"Potential information disclosure: Error messages from the engine are returned directly in HTTP responses. While readBody() truncates to 300 chars, detailed engine error messages could leak internal system information about pipeline stages, database errors, or service architecture.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"app/api/runs/[runId]/status/route.ts\",\n      \"line\": 27,\n      \"description\": \"Missing explicit null check: The json() function at line 27 is not shown in provided context. If run is null before checking, subsequent queries could fail. Verify null safety after getRun().\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"lib/server/export.ts\",\n      \"line\": 252,\n      \"description\": \"No validation on DecisionRow length: The decisionsToCsv function processes all decision rows without checking for excessively large exports which could lead to memory exhaustion or DoS when exporting very large run results.\"\n    }\n  ],\n  \"riskScore\": 35,\n  \"recommendations\": [\n    \"Fix CSV injection: Update csvCell() to escape formula characters by prefixing cells starting with =, +, -, or @ with a single quote (') which forces spreadsheet applications to treat the value as text.\",\n    \"Sanitize engine errors: Implement error wrapping in lib/server/engine.ts to mask internal details. Log full errors server-side but return generic messages to clients for non-debug environments.\",\n    \"Add export size limits: Implement a maximum row limit (e.g., 100k rows) before export to prevent memory exhaustion attacks.\",\n    \"Audit proxy.ts coverage: Verify that the matcher in proxy.ts line 23 properly covers all /api/* routes. Test that disabling auth enforcement is impossible.\",\n    \"Review database permissions: Ensure the Postgres user has minimal required permissions (tables referenced in schema.ts only). The engine connection should be read-only for entities/matches/conflicts.\",\n    \"Validate all POST bodies: Verify that all route handlers use Zod schema validation. Spot-check app/api/*/route.ts files not shown in this review.\",\n    \"Test run-then-export: Verify that only the authenticated user who initiated or reviewed a run can export it (not just anyone with the runId).\"\n  ]\n}\n```\n\n**Key Findings:**\n\n✅ **Strengths:**\n- Authentication is properly enforced via `proxy.ts` using Clerk middleware (protected-first model)\n- SQL injection is mitigated through Drizzle ORM's parameterized queries\n- Secrets are properly handled via environment variables\n- Audit logging captures actors from authenticated sessions, never from client input\n- Input validation uses Zod schemas consistently\n\n⚠️ **Critical Issue:**\nThe CSV export doesn't escape formula injection characters. A conflict value like `=cmd|'/c powershell...'` would be executable when the CSV opens in Excel.\n\n**Quick Fix for CSV Injection:**\n```typescript\nfunction csvCell(value: string | number | null): string {\n  if (value === null) return \"\";\n  const text = String(value);\n  // Escape formula injection by prefixing with single quote\n  if (/^[=+\\-@]/.test(text)) return `'${text}`;\n  return /[\",\\r\\n]/.test(text) ? `\"${text.replace(/\"/g, '\"\"')}\"` : text;\n}\n```\n\nWould you like me to apply these fixes or dive deeper into any specific vulnerability?\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "medium",
+        "file": "lib/server/export.ts",
+        "line": 261,
+        "description": "CSV Injection vulnerability: csvCell() does not escape formula injection characters (=, +, -, @) that can trigger formula execution in spreadsheet applications. User-supplied data like conflict values or rationale could start with these characters and execute formulas when the CSV is opened in Excel/Google Sheets."
+      },
+      {
+        "severity": "medium",
+        "file": "lib/server/engine.ts",
+        "line": 94,
+        "description": "Potential information disclosure: Error messages from the engine are returned directly in HTTP responses. While readBody() truncates to 300 chars, detailed engine error messages could leak internal system information about pipeline stages, database errors, or service architecture."
+      },
+      {
+        "severity": "low",
+        "file": "app/api/runs/[runId]/status/route.ts",
+        "line": 27,
+        "description": "Missing explicit null check: The json() function at line 27 is not shown in provided context. If run is null before checking, subsequent queries could fail. Verify null safety after getRun()."
+      },
+      {
+        "severity": "low",
+        "file": "lib/server/export.ts",
+        "line": 252,
+        "description": "No validation on DecisionRow length: The decisionsToCsv function processes all decision rows without checking for excessively large exports which could lead to memory exhaustion or DoS when exporting very large run results."
+      }
+    ],
+    "riskScore": 35,
+    "recommendations": [
+      "Fix CSV injection: Update csvCell() to escape formula characters by prefixing cells starting with =, +, -, or @ with a single quote (') which forces spreadsheet applications to treat the value as text.",
+      "Sanitize engine errors: Implement error wrapping in lib/server/engine.ts to mask internal details. Log full errors server-side but return generic messages to clients for non-debug environments.",
+      "Add export size limits: Implement a maximum row limit (e.g., 100k rows) before export to prevent memory exhaustion attacks.",
+      "Audit proxy.ts coverage: Verify that the matcher in proxy.ts line 23 properly covers all /api/* routes. Test that disabling auth enforcement is impossible.",
+      "Review database permissions: Ensure the Postgres user has minimal required permissions (tables referenced in schema.ts only). The engine connection should be read-only for entities/matches/conflicts.",
+      "Validate all POST bodies: Verify that all route handlers use Zod schema validation. Spot-check app/api/*/route.ts files not shown in this review.",
+      "Test run-then-export: Verify that only the authenticated user who initiated or reviewed a run can export it (not just anyone with the runId)."
+    ]
+  },
+  "durationMs": 186964,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-07T17:30:33.522Z",
+  "executionId": "audit_1786123646558_j7cirp"
+}

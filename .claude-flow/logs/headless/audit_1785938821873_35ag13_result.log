@@ -1,0 +1,37 @@
+[2026-08-05T14:07:27.585Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "I'll analyze the provided codebase for security vulnerabilities.\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/lib/server/auth.ts\",\n      \"line\": 30,\n      \"description\": \"Error message could be more generic. Revealing that the route 'should be covered by proxy.ts' exposes implementation details about middleware configuration and could aid attackers in bypassing authentication if the matcher/handler mismatch is exploitable.\"\n    }\n  ],\n  \"riskScore\": 15,\n  \"recommendations\": [\n    \"CRITICAL: Conduct a full audit of API route handlers (web/app/api/) with Zod validation. The codebase requires every route to validate input with Zod per AGENTS.md § Web Route Handlers, but these weren't provided for review.\",\n    \"Verify all route handlers implement proper input validation and reject oversized payloads to prevent ReDoS attacks (especially in conflict detection queries with regex patterns).\",\n    \"Add rate limiting to POST /api/runs and PATCH /api/conflicts/*/resolution routes to prevent abuse of the reconciliation engine and review workflow.\",\n    \"Implement CORS headers explicitly (don't rely on defaults). Ensure ENGINE_URL communication from web to engine uses only intended origins.\",\n    \"Add Content Security Policy (CSP) headers, particularly restricting frame-ancestors since Clerk renders portals outside the cascade.\",\n    \"Audit all Clerk appearance configuration and ensure no NEXT_PUBLIC_ variables leak secrets. Current setup is correct, but monitor for drift.\",\n    \"Verify that error responses from /api routes never leak sensitive fields (SQL errors, stack traces, source config details, ruleset content).\",\n    \"Ensure the `audit_log` append-only constraint is enforced at the database level (NOT NULL, CHECK constraints, or triggers), not just at the application layer.\",\n    \"Add dependency audit: run 'npm audit' and 'pip audit' weekly. Pin versions in package.json and uv.lock to prevent surprise updates from compromised transitive dependencies.\",\n    \"Verify DATABASE_URL in production uses connection pooling with IP whitelisting and SSL/TLS enforcement (Supabase has this, but confirm settings).\",\n    \"Confirm ENGINE_URL is internal-only and not exposed in NEXT_PUBLIC_ or client bundles. Currently correct, but add a linter rule to prevent accidental exposure.\",\n    \"For the engine layer: ensure psycopg connections also use SSL, restrict to owned tables only, and log all writes to resolutions/audit_log with timestamps.\"\n  ]\n}\n```\n\n### Summary\n\n**Good security posture:**\n- Secrets are properly excluded from the codebase (documented in AGENTS.md, enforced via `server-only` modules)\n- Database credentials never reach the browser\n- Clerk handles authentication server-side; reviewer identity is enforced server-side, not from client input\n- Table ownership model prevents cross-layer contamination\n- Audit log is append-only (defensible against tampering)\n\n**Cannot fully verify from provided snippets:**\n- Input validation on 15+ API route handlers (critical gap)\n- CORS/CSP headers\n- Rate limiting on job dispatch and review endpoints\n- Error handling sanitization\n- Dependency versions for known CVEs\n\n**Recommend:** Run `npm audit`, `pip audit`, and a manual review of all route handlers in `web/app/api/` to ensure Zod validation is present on every POST/PATCH handler.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "low",
+        "file": "web/lib/server/auth.ts",
+        "line": 30,
+        "description": "Error message could be more generic. Revealing that the route 'should be covered by proxy.ts' exposes implementation details about middleware configuration and could aid attackers in bypassing authentication if the matcher/handler mismatch is exploitable."
+      }
+    ],
+    "riskScore": 15,
+    "recommendations": [
+      "CRITICAL: Conduct a full audit of API route handlers (web/app/api/) with Zod validation. The codebase requires every route to validate input with Zod per AGENTS.md § Web Route Handlers, but these weren't provided for review.",
+      "Verify all route handlers implement proper input validation and reject oversized payloads to prevent ReDoS attacks (especially in conflict detection queries with regex patterns).",
+      "Add rate limiting to POST /api/runs and PATCH /api/conflicts/*/resolution routes to prevent abuse of the reconciliation engine and review workflow.",
+      "Implement CORS headers explicitly (don't rely on defaults). Ensure ENGINE_URL communication from web to engine uses only intended origins.",
+      "Add Content Security Policy (CSP) headers, particularly restricting frame-ancestors since Clerk renders portals outside the cascade.",
+      "Audit all Clerk appearance configuration and ensure no NEXT_PUBLIC_ variables leak secrets. Current setup is correct, but monitor for drift.",
+      "Verify that error responses from /api routes never leak sensitive fields (SQL errors, stack traces, source config details, ruleset content).",
+      "Ensure the `audit_log` append-only constraint is enforced at the database level (NOT NULL, CHECK constraints, or triggers), not just at the application layer.",
+      "Add dependency audit: run 'npm audit' and 'pip audit' weekly. Pin versions in package.json and uv.lock to prevent surprise updates from compromised transitive dependencies.",
+      "Verify DATABASE_URL in production uses connection pooling with IP whitelisting and SSL/TLS enforcement (Supabase has this, but confirm settings).",
+      "Confirm ENGINE_URL is internal-only and not exposed in NEXT_PUBLIC_ or client bundles. Currently correct, but add a linter rule to prevent accidental exposure.",
+      "For the engine layer: ensure psycopg connections also use SSL, restrict to owned tables only, and log all writes to resolutions/audit_log with timestamps."
+    ]
+  },
+  "durationMs": 25712,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T14:07:27.585Z",
+  "executionId": "audit_1785938821873_35ag13"
+}

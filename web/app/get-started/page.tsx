@@ -16,7 +16,7 @@ export default async function GetStartedPage() {
   const configured = counts.crm + counts.warehouse + counts.synthetic > 0;
 
   return (
-    <div className="field-grid min-h-dvh">
+    <div className="min-h-dvh bg-surface-sunken">
       <div className="mx-auto flex min-h-dvh max-w-[880px] flex-col justify-center px-8 py-20">
         {/* This screen has no rail, so it carries its own way out. Without it
             there is no sign-out anywhere on the page. */}

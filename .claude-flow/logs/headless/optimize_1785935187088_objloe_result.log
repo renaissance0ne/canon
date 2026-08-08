@@ -1,0 +1,17 @@
+[2026-08-05T13:06:31.698Z] RESULT
+============================================================
+{
+  "success": false,
+  "output": "You've hit your session limit · resets 7pm (Asia/Calcutta)\n",
+  "parsedOutput": {
+    "sections": [],
+    "codeBlocks": []
+  },
+  "durationMs": 4610,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "optimize",
+  "timestamp": "2026-08-05T13:06:31.698Z",
+  "executionId": "optimize_1785935187088_objloe",
+  "error": "Process exited with code 1"
+}

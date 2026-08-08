@@ -1,0 +1,13 @@
+[2026-08-05T20:05:11.618Z] RESULT
+============================================================
+{
+  "success": false,
+  "output": "",
+  "durationMs": 19045,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "testgaps",
+  "timestamp": "2026-08-05T20:05:11.618Z",
+  "executionId": "testgaps_1785960292573_8itz10",
+  "error": "Process exited with code 1073807364"
+}

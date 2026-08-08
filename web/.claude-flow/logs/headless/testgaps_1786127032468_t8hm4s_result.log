@@ -1,0 +1,17 @@
+[2026-08-07T18:23:55.760Z] RESULT
+============================================================
+{
+  "success": false,
+  "output": "You've hit your session limit · resets 3:50am (Asia/Calcutta)\n",
+  "parsedOutput": {
+    "sections": [],
+    "codeBlocks": []
+  },
+  "durationMs": 3292,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "testgaps",
+  "timestamp": "2026-08-07T18:23:55.760Z",
+  "executionId": "testgaps_1786127032468_t8hm4s",
+  "error": "Process exited with code 1"
+}

@@ -1,0 +1,36 @@
+[2026-08-05T19:36:12.380Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "I'll analyze the provided codebase context for security vulnerabilities.\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/lib/db/index.ts\",\n      \"line\": 30,\n      \"description\": \"Connection caching on globalThis could theoretically lead to connection reuse across different contexts if the module is reloaded in an unexpected way. However, this is mitigated by being server-only and is the documented pattern for Next.js HMR. Monitor for connection exhaustion in production.\"\n    }\n  ],\n  \"riskScore\": 8,\n  \"recommendations\": [\n    \"✓ GOOD: Database credentials properly separated from configuration. Schema explicitly documents that secrets never enter sources.config.\",\n    \"✓ GOOD: All database modules marked 'server-only' to prevent DATABASE_URL from leaking to client bundles.\",\n    \"✓ GOOD: Clerk authentication properly integrated with requireReviewer() throwing on missing session.\",\n    \"✓ GOOD: Prepared statements disabled intentionally for Supabase transaction pooler compatibility — documented rationale.\",\n    \"✓ GOOD: Table ownership clearly documented to prevent engine/web from writing to each other's tables.\",\n    \"Verify: Ensure route handlers (api/) implement Zod validation on all inputs as documented in AGENTS.md.\",\n    \"Verify: Confirm proxy.ts middleware blocks unauthenticated access to all protected routes.\",\n    \"Verify: Engine code confirms it never writes to sources/rulesets tables per documented ownership.\",\n    \"Verify: Audit .env setup ensures SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY never use NEXT_PUBLIC_ prefix.\",\n    \"Monitor: Connection pooling behavior in production to catch potential exhaustion from HMR caching pattern.\",\n    \"Document: Add runtime assertion in source config creation to reject any credential fields.\"\n  ]\n}\n```\n\n**Summary:**\n\nThe codebase demonstrates strong security fundamentals. No hardcoded secrets, proper use of server-only constraints, and clear separation of concerns between the web and engine layers. The architecture follows the principle of \"secrets in `.env`, configuration in database\" consistently.\n\nThe main surface area for security depends on code not shown in this context:\n- **Route handlers** (`app/api/`) — must validate all inputs with Zod\n- **Engine layer** — must respect table ownership constraints\n- **Middleware** (`proxy.ts`) — must enforce authentication\n\nThe risk score is low (8/100) because the visible code implements the documented security policies correctly. Focus verification on ensuring the hidden components (routes, engine) follow the same patterns.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "low",
+        "file": "web/lib/db/index.ts",
+        "line": 30,
+        "description": "Connection caching on globalThis could theoretically lead to connection reuse across different contexts if the module is reloaded in an unexpected way. However, this is mitigated by being server-only and is the documented pattern for Next.js HMR. Monitor for connection exhaustion in production."
+      }
+    ],
+    "riskScore": 8,
+    "recommendations": [
+      "✓ GOOD: Database credentials properly separated from configuration. Schema explicitly documents that secrets never enter sources.config.",
+      "✓ GOOD: All database modules marked 'server-only' to prevent DATABASE_URL from leaking to client bundles.",
+      "✓ GOOD: Clerk authentication properly integrated with requireReviewer() throwing on missing session.",
+      "✓ GOOD: Prepared statements disabled intentionally for Supabase transaction pooler compatibility — documented rationale.",
+      "✓ GOOD: Table ownership clearly documented to prevent engine/web from writing to each other's tables.",
+      "Verify: Ensure route handlers (api/) implement Zod validation on all inputs as documented in AGENTS.md.",
+      "Verify: Confirm proxy.ts middleware blocks unauthenticated access to all protected routes.",
+      "Verify: Engine code confirms it never writes to sources/rulesets tables per documented ownership.",
+      "Verify: Audit .env setup ensures SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY never use NEXT_PUBLIC_ prefix.",
+      "Monitor: Connection pooling behavior in production to catch potential exhaustion from HMR caching pattern.",
+      "Document: Add runtime assertion in source config creation to reject any credential fields."
+    ]
+  },
+  "durationMs": 27409,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T19:36:12.380Z",
+  "executionId": "audit_1785958544971_i3wxrn"
+}

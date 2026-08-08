@@ -1,0 +1,93 @@
+[2026-08-05T15:00:52.271Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": 11,\n      \"description\": \"Database credentials hardcoded in environment file. Supabase connection string with real username and password exposed: DATABASE_URL contains 'postgres.yenteczevefirhvgyvcu:ArlecchinoxZhongli' credentials that should never be committed to version control.\"\n    },\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": 17,\n      \"description\": \"Database migration credentials hardcoded. MIGRATION_DATABASE_URL exposes the same Supabase credentials as runtime connection, repeated twice increasing exposure surface.\"\n    },\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": 30,\n      \"description\": \"Clerk secret key exposed in plaintext. CLERK_SECRET_KEY=sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf should never be in version control or development files. This key can authenticate as the application to Clerk.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \".env\",\n      \"line\": 11,\n      \"description\": \"Secrets committed to repository. .env files are typically development artifacts that must be gitignored. These credentials grant direct database access and should be rotated immediately.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"lib/db/index.ts\",\n      \"line\": 24,\n      \"description\": \"Error message may expose environment variable name. When DATABASE_URL is missing, the error references the env var name which could leak presence of secrets to error logging systems. Consider using a generic error message.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \".env\",\n      \"line\": 21,\n      \"description\": \"Engine URL not validated for trust. ENGINE_URL points to localhost:8000 without protocol validation. A misconfigured or compromised environment could be exploited. Consider adding URL validation and whitelist.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"proxy.ts\",\n      \"line\": 1,\n      \"description\": \"No visible CSRF protection configuration. Middleware relies on Clerk's built-in protection, but explicit CSRF tokens or SameSite cookie directives are not shown. Verify Clerk middleware includes CSRF safeguards.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"package.json\",\n      \"line\": 24,\n      \"description\": \"Missing lock file in repository context. No package-lock.json or yarn.lock shown. This prevents reproducible builds and could allow supply-chain attacks through dependency version drift.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"next.config.ts\",\n      \"line\": 1,\n      \"description\": \"No explicit security headers configured. The Next.js config doesn't show CSP, X-Frame-Options, X-Content-Type-Options headers. Consider adding headers() in middleware or next.config.ts for defense-in-depth.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"lib/db/schema.ts\",\n      \"line\": 26,\n      \"description\": \"No visible API rate limiting. Database schema and handlers don't show rate limiting configuration. API endpoints for run creation and conflict review should implement per-user/session rate limits.\"\n    }\n  ],\n  \"riskScore\": 78,\n  \"recommendations\": [\n    \"IMMEDIATE: Rotate Supabase credentials (DATABASE_URL, MIGRATION_DATABASE_URL) and Clerk secret key (sk_test_*). These are exposed in this analysis.\",\n    \"IMMEDIATE: Remove .env from version control history using `git filter-branch` or `git filter-repo`. Add .env to .gitignore with pattern: '.env', '.env.local', '.env.*.local'\",\n    \"HIGH: Implement secret scanning in CI/CD using tools like git-secrets, TruffleHog, or GitHub's built-in secret scanning to prevent re-exposure.\",\n    \"HIGH: Use a secrets management service (AWS Secrets Manager, Google Secret Manager, Vault) for production. Never store secrets in environment files even locally.\",\n    \"HIGH: Implement environment-specific configuration: dev uses .env.example placeholders, staging/prod read from secure vaults via deployment orchestration.\",\n    \"MEDIUM: Add explicit security headers via next.config.ts middleware: Content-Security-Policy, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Strict-Transport-Security\",\n    \"MEDIUM: Validate and whitelist ENGINE_URL. Use URL constructor to parse and verify protocol/host: `new URL(process.env.ENGINE_URL).protocol === 'http:'`\",\n    \"MEDIUM: Implement rate limiting on API routes (e.g., `/api/conflicts/:id/resolution`) using middleware or packages like `Ratelimit` from Vercel.\",\n    \"MEDIUM: Replace generic error messages when DATABASE_URL is missing to avoid leaking environment variable names to error logs or monitoring systems.\",\n    \"MEDIUM: Add package-lock.json (npm) or yarn.lock to repository to ensure reproducible dependency installations and prevent version-drift attacks.\",\n    \"LOW: Verify Clerk middleware includes SameSite=Strict cookie settings and CSRF tokens for state-changing operations (POST/PATCH).\",\n    \"LOW: Implement Content Security Policy (CSP) to restrict script sources, prevent XSS, and disable unsafe-eval for next.config.ts.\",\n    \"LOW: Add security.txt at /.well-known/security.txt with vulnerability reporting instructions.\",\n    \"LOW: Review audit_log access patterns — ensure only authenticated reviewers can read who approved/rejected changes to maintain integrity of the audit trail.\"\n  ]\n}\n```\n\n---\n\n## Summary\n\n**Risk Score: 78/100** — High risk due to critical exposure of production secrets.\n\n### Critical Issues:\n1. **Exposed database credentials** in `.env` — real Supabase username/password visible\n2. **Exposed Clerk secret key** — can authenticate to Clerk as the application\n3. **Version control exposure** — these secrets are in a file that's typically committed\n\n### Immediate Actions:\n- Rotate all credentials immediately (DATABASE_URL, MIGRATION_DATABASE_URL, CLERK_SECRET_KEY)\n- Remove .env from git history \n- Add .env to .gitignore\n\n### Root Cause:\nThe `.env` file contains actual credentials and appears to be tracked in version control. The `.env.example` template is correct (using placeholders), but the real `.env` file should never be committed or shared.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": 11,
+        "description": "Database credentials hardcoded in environment file. Supabase connection string with real username and password exposed: DATABASE_URL contains 'postgres.yenteczevefirhvgyvcu:ArlecchinoxZhongli' credentials that should never be committed to version control."
+      },
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": 17,
+        "description": "Database migration credentials hardcoded. MIGRATION_DATABASE_URL exposes the same Supabase credentials as runtime connection, repeated twice increasing exposure surface."
+      },
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": 30,
+        "description": "Clerk secret key exposed in plaintext. CLERK_SECRET_KEY=sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf should never be in version control or development files. This key can authenticate as the application to Clerk."
+      },
+      {
+        "severity": "high",
+        "file": ".env",
+        "line": 11,
+        "description": "Secrets committed to repository. .env files are typically development artifacts that must be gitignored. These credentials grant direct database access and should be rotated immediately."
+      },
+      {
+        "severity": "medium",
+        "file": "lib/db/index.ts",
+        "line": 24,
+        "description": "Error message may expose environment variable name. When DATABASE_URL is missing, the error references the env var name which could leak presence of secrets to error logging systems. Consider using a generic error message."
+      },
+      {
+        "severity": "medium",
+        "file": ".env",
+        "line": 21,
+        "description": "Engine URL not validated for trust. ENGINE_URL points to localhost:8000 without protocol validation. A misconfigured or compromised environment could be exploited. Consider adding URL validation and whitelist."
+      },
+      {
+        "severity": "medium",
+        "file": "proxy.ts",
+        "line": 1,
+        "description": "No visible CSRF protection configuration. Middleware relies on Clerk's built-in protection, but explicit CSRF tokens or SameSite cookie directives are not shown. Verify Clerk middleware includes CSRF safeguards."
+      },
+      {
+        "severity": "low",
+        "file": "package.json",
+        "line": 24,
+        "description": "Missing lock file in repository context. No package-lock.json or yarn.lock shown. This prevents reproducible builds and could allow supply-chain attacks through dependency version drift."
+      },
+      {
+        "severity": "low",
+        "file": "next.config.ts",
+        "line": 1,
+        "description": "No explicit security headers configured. The Next.js config doesn't show CSP, X-Frame-Options, X-Content-Type-Options headers. Consider adding headers() in middleware or next.config.ts for defense-in-depth."
+      },
+      {
+        "severity": "low",
+        "file": "lib/db/schema.ts",
+        "line": 26,
+        "description": "No visible API rate limiting. Database schema and handlers don't show rate limiting configuration. API endpoints for run creation and conflict review should implement per-user/session rate limits."
+      }
+    ],
+    "riskScore": 78,
+    "recommendations": [
+      "IMMEDIATE: Rotate Supabase credentials (DATABASE_URL, MIGRATION_DATABASE_URL) and Clerk secret key (sk_test_*). These are exposed in this analysis.",
+      "IMMEDIATE: Remove .env from version control history using `git filter-branch` or `git filter-repo`. Add .env to .gitignore with pattern: '.env', '.env.local', '.env.*.local'",
+      "HIGH: Implement secret scanning in CI/CD using tools like git-secrets, TruffleHog, or GitHub's built-in secret scanning to prevent re-exposure.",
+      "HIGH: Use a secrets management service (AWS Secrets Manager, Google Secret Manager, Vault) for production. Never store secrets in environment files even locally.",
+      "HIGH: Implement environment-specific configuration: dev uses .env.example placeholders, staging/prod read from secure vaults via deployment orchestration.",
+      "MEDIUM: Add explicit security headers via next.config.ts middleware: Content-Security-Policy, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Strict-Transport-Security",
+      "MEDIUM: Validate and whitelist ENGINE_URL. Use URL constructor to parse and verify protocol/host: `new URL(process.env.ENGINE_URL).protocol === 'http:'`",
+      "MEDIUM: Implement rate limiting on API routes (e.g., `/api/conflicts/:id/resolution`) using middleware or packages like `Ratelimit` from Vercel.",
+      "MEDIUM: Replace generic error messages when DATABASE_URL is missing to avoid leaking environment variable names to error logs or monitoring systems.",
+      "MEDIUM: Add package-lock.json (npm) or yarn.lock to repository to ensure reproducible dependency installations and prevent version-drift attacks.",
+      "LOW: Verify Clerk middleware includes SameSite=Strict cookie settings and CSRF tokens for state-changing operations (POST/PATCH).",
+      "LOW: Implement Content Security Policy (CSP) to restrict script sources, prevent XSS, and disable unsafe-eval for next.config.ts.",
+      "LOW: Add security.txt at /.well-known/security.txt with vulnerability reporting instructions.",
+      "LOW: Review audit_log access patterns — ensure only authenticated reviewers can read who approved/rejected changes to maintain integrity of the audit trail."
+    ]
+  },
+  "durationMs": 50455,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T15:00:52.271Z",
+  "executionId": "audit_1785942001816_b8ypil"
+}

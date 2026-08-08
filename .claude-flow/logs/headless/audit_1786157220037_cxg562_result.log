@@ -1,0 +1,33 @@
+[2026-08-08T02:47:30.062Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/app/api/audit/export/route.ts\",\n      \"line\": 68,\n      \"description\": \"Potential CSV injection vulnerability. While csvCell() escapes quotes and delimiters, formula injection (rows starting with =, +, -, @) is not mitigated. A malicious `detail` field containing '=cmd|shutdown' could trigger formula execution in Excel/Sheets.\"\n    }\n  ],\n  \"riskScore\": 15,\n  \"recommendations\": [\n    \"Add formula injection prevention in csvCell(): prefix cells starting with =, +, -, @, or % with a single quote to neutralize formula interpretation\",\n    \"Example: function csvCell(value: string): string { if (/^[=+\\\\-@%]/.test(value)) value = \\\"'\\\" + value; return /[\\\"\\\\,\\\\r\\\\n]/.test(value) ? `\\\"${value.replace(/\\\"/g, '\\\"\\\"')}\\\"` : value; }\",\n    \"Verify that all Clerk secret keys (CLERK_SECRET_KEY, etc.) are stored in engine/.env or web/.env.local only, never in NEXT_PUBLIC_* variables\",\n    \"The code correctly follows AGENTS.md security rules: secrets in .env (engine/.env for API keys, DB creds), Clerk publishable key in VITE_* (safe for browser), proper auth checks on audit routes\",\n    \"Dependencies in engine/.venv/ should be regularly scanned with `pip audit` or `safety` for known CVEs\",\n    \"Verify that ENGINE_URL in web/.env is not exposed publicly (should be server-side only)\",\n    \"Audit trail export requires authentication (requireReviewer()) — ✓ correct\",\n    \"Route validation with Zod schemas is properly implemented — ✓ correct\"\n  ]\n}\n```\n\n## Summary\n\n**Good security posture overall.** The codebase correctly implements the security architecture from AGENTS.md:\n- ✓ No hardcoded secrets in source files\n- ✓ Credentials isolated to `.env` files (not shown, assumed secure)\n- ✓ Clerk publishable keys properly placed in VITE_* (browser-safe)\n- ✓ Route handlers validate input with Zod\n- ✓ Authorization checks in place (`requireReviewer()`)\n- ✓ Layer boundaries enforced (engine secrets not in web)\n\n**One low-risk finding:** CSV injection formulas in audit export. The `csvCell()` escaping is 95% there but misses formula prefix protection. This is minor but worth fixing before production.\n\n**Action:** Add the single-quote prefix pattern shown in recommendations to fully mitigate CSV injection.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "low",
+        "file": "web/app/api/audit/export/route.ts",
+        "line": 68,
+        "description": "Potential CSV injection vulnerability. While csvCell() escapes quotes and delimiters, formula injection (rows starting with =, +, -, @) is not mitigated. A malicious `detail` field containing '=cmd|shutdown' could trigger formula execution in Excel/Sheets."
+      }
+    ],
+    "riskScore": 15,
+    "recommendations": [
+      "Add formula injection prevention in csvCell(): prefix cells starting with =, +, -, @, or % with a single quote to neutralize formula interpretation",
+      "Example: function csvCell(value: string): string { if (/^[=+\\-@%]/.test(value)) value = \"'\" + value; return /[\"\\,\\r\\n]/.test(value) ? `\"${value.replace(/\"/g, '\"\"')}\"` : value; }",
+      "Verify that all Clerk secret keys (CLERK_SECRET_KEY, etc.) are stored in engine/.env or web/.env.local only, never in NEXT_PUBLIC_* variables",
+      "The code correctly follows AGENTS.md security rules: secrets in .env (engine/.env for API keys, DB creds), Clerk publishable key in VITE_* (safe for browser), proper auth checks on audit routes",
+      "Dependencies in engine/.venv/ should be regularly scanned with `pip audit` or `safety` for known CVEs",
+      "Verify that ENGINE_URL in web/.env is not exposed publicly (should be server-side only)",
+      "Audit trail export requires authentication (requireReviewer()) — ✓ correct",
+      "Route validation with Zod schemas is properly implemented — ✓ correct"
+    ]
+  },
+  "durationMs": 30025,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-08T02:47:30.062Z",
+  "executionId": "audit_1786157220037_cxg562"
+}

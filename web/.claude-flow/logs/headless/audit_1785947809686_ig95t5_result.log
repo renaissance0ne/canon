@@ -1,0 +1,60 @@
+[2026-08-05T16:37:27.677Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Now I'll provide the security analysis based on my review of the codebase:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \".env\",\n      \"line\": 15,\n      \"description\": \"Database credentials hardcoded in .env file. DATABASE_URL contains actual Supabase connection string with plaintext password. This file should NEVER be committed to version control.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \".env\",\n      \"line\": 20,\n      \"description\": \"Migration database credentials hardcoded. MIGRATION_DATABASE_URL exposes Supabase credentials. This file must be added to .gitignore immediately.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \".env\",\n      \"line\": 28,\n      \"description\": \"Clerk secret key hardcoded: sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf. Secret keys must never be committed to version control.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \".env\",\n      \"line\": 1,\n      \"description\": \".env file is not in .gitignore. There is no .gitignore file in the repository root, creating risk of accidental credential exposure in git history.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"proxy.ts\",\n      \"line\": 1,\n      \"description\": \"No rate limiting configured on API endpoints. Consider implementing rate limiting on route handlers to prevent brute force attacks and abuse.\"\n    }\n  ],\n  \"riskScore\": 72,\n  \"recommendations\": [\n    \"CRITICAL: Invalidate all exposed credentials immediately - regenerate Supabase passwords and Clerk secret keys, update DATABASE_URL and MIGRATION_DATABASE_URL\",\n    \"Create a .gitignore file and add: .env, .env.local, .env.*.local, *.key, *.pem\",\n    \"Use .env.example (which correctly uses placeholders) as your template for new developers\",\n    \"Set up pre-commit hooks to prevent .env files from being committed (install husky, add lint-staged)\",\n    \"Move the .env file from git history: use 'git filter-branch' or 'bfg-repo-cleaner' to purge credentials from all commits\",\n    \"Enable branch protection rules requiring pull request reviews before merging\",\n    \"Add API rate limiting middleware to route handlers in app/api/ (consider packages like ratelimit or tiny-rate-limiter)\",\n    \"Implement Content Security Policy (CSP) headers in next.config.ts to prevent XSS\",\n    \"Use Next.js environment variable validation at build time (check if DATABASE_URL exists without committing it)\",\n    \"Audit npm dependencies for known vulnerabilities: run 'npm audit' regularly\",\n    \"Consider using a secrets management tool like Doppler, HashiCorp Vault, or AWS Secrets Manager for production\"\n  ]\n}\n```\n\n## Summary\n\n**Critical Issues Found:**\n1. **Hardcoded secrets in .env** — Database credentials and Clerk secret key are exposed in plain text\n2. **No .gitignore** — The repository has no gitignore file, making accidental commits of secrets likely\n3. **Credentials in repository** — These credentials are now part of git history and must be considered compromised\n\n**Positive Security Findings:**\n- ✅ Protected-first auth with Clerk (only `/`, `/sign-in`, `/sign-up` are public)\n- ✅ Server-only modules properly marked to prevent secrets reaching the client\n- ✅ Drizzle ORM prevents SQL injection via parameterized queries\n- ✅ Zod schema validation on all types\n- ✅ No XSS vulnerabilities detected in provided code\n- ✅ Proper separation of concerns (engine credentials never in web layer)\n- ✅ Good use of TypeScript for type safety\n\n**Immediate Actions Required:**\n1. Rotate all exposed credentials (Supabase password, Clerk secret key)\n2. Create and commit `.gitignore` with `.env` patterns\n3. Purge credentials from git history\n4. Never commit `.env` files — use `.env.example` for templates\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "high",
+        "file": ".env",
+        "line": 15,
+        "description": "Database credentials hardcoded in .env file. DATABASE_URL contains actual Supabase connection string with plaintext password. This file should NEVER be committed to version control."
+      },
+      {
+        "severity": "high",
+        "file": ".env",
+        "line": 20,
+        "description": "Migration database credentials hardcoded. MIGRATION_DATABASE_URL exposes Supabase credentials. This file must be added to .gitignore immediately."
+      },
+      {
+        "severity": "high",
+        "file": ".env",
+        "line": 28,
+        "description": "Clerk secret key hardcoded: sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf. Secret keys must never be committed to version control."
+      },
+      {
+        "severity": "medium",
+        "file": ".env",
+        "line": 1,
+        "description": ".env file is not in .gitignore. There is no .gitignore file in the repository root, creating risk of accidental credential exposure in git history."
+      },
+      {
+        "severity": "low",
+        "file": "proxy.ts",
+        "line": 1,
+        "description": "No rate limiting configured on API endpoints. Consider implementing rate limiting on route handlers to prevent brute force attacks and abuse."
+      }
+    ],
+    "riskScore": 72,
+    "recommendations": [
+      "CRITICAL: Invalidate all exposed credentials immediately - regenerate Supabase passwords and Clerk secret keys, update DATABASE_URL and MIGRATION_DATABASE_URL",
+      "Create a .gitignore file and add: .env, .env.local, .env.*.local, *.key, *.pem",
+      "Use .env.example (which correctly uses placeholders) as your template for new developers",
+      "Set up pre-commit hooks to prevent .env files from being committed (install husky, add lint-staged)",
+      "Move the .env file from git history: use 'git filter-branch' or 'bfg-repo-cleaner' to purge credentials from all commits",
+      "Enable branch protection rules requiring pull request reviews before merging",
+      "Add API rate limiting middleware to route handlers in app/api/ (consider packages like ratelimit or tiny-rate-limiter)",
+      "Implement Content Security Policy (CSP) headers in next.config.ts to prevent XSS",
+      "Use Next.js environment variable validation at build time (check if DATABASE_URL exists without committing it)",
+      "Audit npm dependencies for known vulnerabilities: run 'npm audit' regularly",
+      "Consider using a secrets management tool like Doppler, HashiCorp Vault, or AWS Secrets Manager for production"
+    ]
+  },
+  "durationMs": 37991,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T16:37:27.677Z",
+  "executionId": "audit_1785947809686_ig95t5"
+}

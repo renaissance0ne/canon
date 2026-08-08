@@ -10,7 +10,8 @@ export function PageHeader({
   actions,
   className,
 }: {
-  title: string;
+  /** A node, not just a string: a run's title carries its id, and ids are mono. */
+  title: React.ReactNode;
   meta?: React.ReactNode;
   actions?: React.ReactNode;
   className?: string;

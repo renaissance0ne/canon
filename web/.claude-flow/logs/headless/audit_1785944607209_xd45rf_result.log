@@ -1,0 +1,91 @@
+[2026-08-05T15:44:11.121Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Based on my analysis of the provided codebase, here's the security vulnerability report:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \".env\",\n      \"line\": 12,\n      \"description\": \"Hardcoded database credentials exposed. DATABASE_URL contains Supabase username and password in plaintext. This suggests the .env file may be committed to version control, violating OWASP A02:2021 Cryptographic Failures.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \".env\",\n      \"line\": 18,\n      \"description\": \"Hardcoded Clerk secret key exposed. CLERK_SECRET_KEY contains actual test secret 'sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf'. Secret keys must never be committed to version control.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \".env\",\n      \"line\": 16,\n      \"description\": \"Duplicate database credentials in MIGRATION_DATABASE_URL with exposed Supabase username/password combination, same risk as DATABASE_URL.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"lib/db/index.ts\",\n      \"line\": 33,\n      \"description\": \"Database connection lacks explicit SSL enforcement. For production, the postgres() client should enforce SSL/TLS to prevent man-in-the-middle attacks. Consider adding ssl: 'require' option.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"types/source.ts\",\n      \"line\": 8,\n      \"description\": \"Unvalidated 'filter' field in sourceConfigSchema accepts arbitrary strings. If this filter is used in database queries without proper parameterization, it could enable SQL injection attacks.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"lib/db/index.ts\",\n      \"line\": 23,\n      \"description\": \"Error messages expose configuration details. Exception message reveals 'DATABASE_URL' environment variable name and 'server-side only' implementation details, potentially aiding reconnaissance.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"drizzle.config.ts\",\n      \"line\": 11,\n      \"description\": \"Migrations use fallback logic without verification. Code defaults to DATABASE_URL if MIGRATION_DATABASE_URL is unset, which could cause migrations to run against the wrong database in misconfigured environments.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \".env\",\n      \"line\": 24,\n      \"description\": \"ENGINE_URL is internal but no authentication mechanism visible in provided code. API calls to the engine should require API key or mTLS authentication to prevent unauthorized access.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"proxy.ts\",\n      \"line\": 15,\n      \"description\": \"Relies on Clerk middleware for protection but no explicit CSRF token validation visible. Verify that Clerk's default CSRF protection is enabled for all state-changing operations.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"lib/db/schema.ts\",\n      \"line\": 50,\n      \"description\": \"Multiple JSONB fields lack database-level schema validation. While Zod validates at application layer, database-stored JSONB fields (config, fields, signals, rules, attributes) have no constraints. Schema drift during updates could cause data corruption.\"\n    }\n  ],\n  \"riskScore\": 78,\n  \"recommendations\": [\n    \"IMMEDIATE: Remove .env from version control. Add to .gitignore, use .env.example with placeholders, and rotate all exposed credentials (Supabase, Clerk keys).\",\n    \"IMMEDIATE: Implement secrets management (e.g., GitHub Secrets, 1Password, AWS Secrets Manager) for all credentials. Never commit secrets.\",\n    \"Add explicit SSL requirement: postgres(url, { prepare: false, ssl: 'require' })\",\n    \"Audit how sourceConfig.filter is used in the engine. Ensure it's passed as a query parameter, never interpolated into SQL strings.\",\n    \"Implement API authentication between web and engine (API key header or mTLS). Verify ENGINE_URL calls use these credentials.\",\n    \"Add Content-Security-Policy headers to prevent XSS. Configure in middleware or next.config.ts.\",\n    \"Implement rate limiting on authentication endpoints (/sign-in, /sign-up) to prevent brute force attacks.\",\n    \"Add database-level JSON schema validation using PostgreSQL CHECK constraints for JSONB fields to enforce data structure integrity.\",\n    \"Remove or sanitize error messages that expose configuration details. Log internally, return generic messages to clients.\",\n    \"Verify Clerk configuration has CSRF protection enabled for all POST/PATCH/DELETE operations.\",\n    \"Enable database connection timeouts and implement query execution limits to prevent DoS.\",\n    \"Conduct a security audit of the engine codebase (engine/) for SQL injection, authentication bypass, and other server-side vulnerabilities.\"\n  ]\n}\n```\n\n**Critical Action Required:** The hardcoded credentials in your `.env` file represent an immediate security breach. These credentials should be **revoked immediately** in your Supabase and Clerk dashboards, and new credentials should be issued. The `.env` file should never be committed to version control.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "high",
+        "file": ".env",
+        "line": 12,
+        "description": "Hardcoded database credentials exposed. DATABASE_URL contains Supabase username and password in plaintext. This suggests the .env file may be committed to version control, violating OWASP A02:2021 Cryptographic Failures."
+      },
+      {
+        "severity": "high",
+        "file": ".env",
+        "line": 18,
+        "description": "Hardcoded Clerk secret key exposed. CLERK_SECRET_KEY contains actual test secret 'sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf'. Secret keys must never be committed to version control."
+      },
+      {
+        "severity": "high",
+        "file": ".env",
+        "line": 16,
+        "description": "Duplicate database credentials in MIGRATION_DATABASE_URL with exposed Supabase username/password combination, same risk as DATABASE_URL."
+      },
+      {
+        "severity": "medium",
+        "file": "lib/db/index.ts",
+        "line": 33,
+        "description": "Database connection lacks explicit SSL enforcement. For production, the postgres() client should enforce SSL/TLS to prevent man-in-the-middle attacks. Consider adding ssl: 'require' option."
+      },
+      {
+        "severity": "medium",
+        "file": "types/source.ts",
+        "line": 8,
+        "description": "Unvalidated 'filter' field in sourceConfigSchema accepts arbitrary strings. If this filter is used in database queries without proper parameterization, it could enable SQL injection attacks."
+      },
+      {
+        "severity": "medium",
+        "file": "lib/db/index.ts",
+        "line": 23,
+        "description": "Error messages expose configuration details. Exception message reveals 'DATABASE_URL' environment variable name and 'server-side only' implementation details, potentially aiding reconnaissance."
+      },
+      {
+        "severity": "medium",
+        "file": "drizzle.config.ts",
+        "line": 11,
+        "description": "Migrations use fallback logic without verification. Code defaults to DATABASE_URL if MIGRATION_DATABASE_URL is unset, which could cause migrations to run against the wrong database in misconfigured environments."
+      },
+      {
+        "severity": "medium",
+        "file": ".env",
+        "line": 24,
+        "description": "ENGINE_URL is internal but no authentication mechanism visible in provided code. API calls to the engine should require API key or mTLS authentication to prevent unauthorized access."
+      },
+      {
+        "severity": "low",
+        "file": "proxy.ts",
+        "line": 15,
+        "description": "Relies on Clerk middleware for protection but no explicit CSRF token validation visible. Verify that Clerk's default CSRF protection is enabled for all state-changing operations."
+      },
+      {
+        "severity": "low",
+        "file": "lib/db/schema.ts",
+        "line": 50,
+        "description": "Multiple JSONB fields lack database-level schema validation. While Zod validates at application layer, database-stored JSONB fields (config, fields, signals, rules, attributes) have no constraints. Schema drift during updates could cause data corruption."
+      }
+    ],
+    "riskScore": 78,
+    "recommendations": [
+      "IMMEDIATE: Remove .env from version control. Add to .gitignore, use .env.example with placeholders, and rotate all exposed credentials (Supabase, Clerk keys).",
+      "IMMEDIATE: Implement secrets management (e.g., GitHub Secrets, 1Password, AWS Secrets Manager) for all credentials. Never commit secrets.",
+      "Add explicit SSL requirement: postgres(url, { prepare: false, ssl: 'require' })",
+      "Audit how sourceConfig.filter is used in the engine. Ensure it's passed as a query parameter, never interpolated into SQL strings.",
+      "Implement API authentication between web and engine (API key header or mTLS). Verify ENGINE_URL calls use these credentials.",
+      "Add Content-Security-Policy headers to prevent XSS. Configure in middleware or next.config.ts.",
+      "Implement rate limiting on authentication endpoints (/sign-in, /sign-up) to prevent brute force attacks.",
+      "Add database-level JSON schema validation using PostgreSQL CHECK constraints for JSONB fields to enforce data structure integrity.",
+      "Remove or sanitize error messages that expose configuration details. Log internally, return generic messages to clients.",
+      "Verify Clerk configuration has CSRF protection enabled for all POST/PATCH/DELETE operations.",
+      "Enable database connection timeouts and implement query execution limits to prevent DoS.",
+      "Conduct a security audit of the engine codebase (engine/) for SQL injection, authentication bypass, and other server-side vulnerabilities."
+    ]
+  },
+  "durationMs": 43912,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T15:44:11.121Z",
+  "executionId": "audit_1785944607209_xd45rf"
+}

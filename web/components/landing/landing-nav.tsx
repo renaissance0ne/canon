@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Show, UserButton } from "@clerk/nextjs";
 import { CanonLockup } from "@/components/canon-mark";
+import { GradualBlur } from "@/components/visual/gradual-blur";
 import { Button } from "@/components/ui/button";
 
 const LINKS = [
@@ -55,6 +56,13 @@ export function LandingNav() {
           </Show>
         </div>
       </div>
+
+      {/* A short ramp immediately below the bar, travelling with it. The veil is
+          62% opaque, which is enough to sit over the page but not enough to stop
+          a line of mono from being read through it — this dissolves whatever is
+          about to pass underneath so the two never compete. `top-full` wins over
+          the component's own `top-0` through tailwind-merge. */}
+      <GradualBlur position="top" height="56px" strength={5} className="top-full" />
     </header>
   );
 }

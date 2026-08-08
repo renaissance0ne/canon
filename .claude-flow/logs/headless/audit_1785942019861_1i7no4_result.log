@@ -1,0 +1,45 @@
+[2026-08-05T15:00:51.071Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/lib/db/index.ts\",\n      \"line\": 26,\n      \"description\": \"Prepared statements are disabled with `{ prepare: false }` for Supabase transaction pooler compatibility. While documented and mitigated by Drizzle ORM parameterization, this reduces SQL injection defenses. Consider using a direct connection pool instead if possible, or ensure query parameterization is enforced at the ORM layer.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/lib/db/index.ts\",\n      \"line\": 30,\n      \"description\": \"Error message reveals that DATABASE_URL is an environment variable, which could leak deployment infrastructure details to an attacker. Consider a more generic error message.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/lib/server/auth.ts\",\n      \"line\": 29,\n      \"description\": \"Error message in `requireReviewer()` states that the route 'should be covered by proxy.ts', which could leak information about middleware topology if this error is exposed in logs or responses.\"\n    }\n  ],\n  \"riskScore\": 22,\n  \"recommendations\": [\n    \"Verify that all route handlers implement Zod validation as stated in AGENTS.md — the code shown does not include handler implementations. Conduct spot-checks on at least 5 route handlers.\",\n    \"Review the Clerk configuration in route handlers to ensure NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is the only Clerk-related variable exposed to the browser; all secret keys must stay in server-only code.\",\n    \"Audit all uses of `sources.config` to ensure no credentials are ever serialized into the jsonb column. Use automated scanning (grep) for patterns like `password`, `token`, `secret`, `key` within JSON construction.\",\n    \"Add a secrets scan to CI/CD (e.g., git-secrets, TruffleHog) to catch hardcoded API keys in future commits.\",\n    \"Document why `prepare: false` is required for Supabase in a security-focused comment and add a TODO to reassess when Supabase pooler supports prepared statements.\",\n    \"Ensure all error messages logged or returned to clients do not leak deployment details (database URL format, middleware topology, environment variable names).\",\n    \"Verify that the engine layer (`engine/`) never writes to `sources` or `rulesets` tables — add a database-level trigger or view to enforce table ownership as a defense-in-depth measure.\",\n    \"Check that all Clerk SDK versions are up-to-date, as authentication libraries receive regular security patches.\"\n  ]\n}\n```\n\n**Summary**: The codebase demonstrates strong security discipline with server-only modules, ORM usage, environment-variable-based secrets, and clear table ownership separation. No hardcoded secrets, XSS, or critical SQL injection risks were found. The three issues identified are minor and mostly related to operational details (error messages, prepared statement trade-off) rather than active vulnerabilities. The architecture aligns well with the security rules outlined in AGENTS.md.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "medium",
+        "file": "web/lib/db/index.ts",
+        "line": 26,
+        "description": "Prepared statements are disabled with `{ prepare: false }` for Supabase transaction pooler compatibility. While documented and mitigated by Drizzle ORM parameterization, this reduces SQL injection defenses. Consider using a direct connection pool instead if possible, or ensure query parameterization is enforced at the ORM layer."
+      },
+      {
+        "severity": "low",
+        "file": "web/lib/db/index.ts",
+        "line": 30,
+        "description": "Error message reveals that DATABASE_URL is an environment variable, which could leak deployment infrastructure details to an attacker. Consider a more generic error message."
+      },
+      {
+        "severity": "low",
+        "file": "web/lib/server/auth.ts",
+        "line": 29,
+        "description": "Error message in `requireReviewer()` states that the route 'should be covered by proxy.ts', which could leak information about middleware topology if this error is exposed in logs or responses."
+      }
+    ],
+    "riskScore": 22,
+    "recommendations": [
+      "Verify that all route handlers implement Zod validation as stated in AGENTS.md — the code shown does not include handler implementations. Conduct spot-checks on at least 5 route handlers.",
+      "Review the Clerk configuration in route handlers to ensure NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is the only Clerk-related variable exposed to the browser; all secret keys must stay in server-only code.",
+      "Audit all uses of `sources.config` to ensure no credentials are ever serialized into the jsonb column. Use automated scanning (grep) for patterns like `password`, `token`, `secret`, `key` within JSON construction.",
+      "Add a secrets scan to CI/CD (e.g., git-secrets, TruffleHog) to catch hardcoded API keys in future commits.",
+      "Document why `prepare: false` is required for Supabase in a security-focused comment and add a TODO to reassess when Supabase pooler supports prepared statements.",
+      "Ensure all error messages logged or returned to clients do not leak deployment details (database URL format, middleware topology, environment variable names).",
+      "Verify that the engine layer (`engine/`) never writes to `sources` or `rulesets` tables — add a database-level trigger or view to enforce table ownership as a defense-in-depth measure.",
+      "Check that all Clerk SDK versions are up-to-date, as authentication libraries receive regular security patches."
+    ]
+  },
+  "durationMs": 31210,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T15:00:51.071Z",
+  "executionId": "audit_1785942019861_1i7no4"
+}

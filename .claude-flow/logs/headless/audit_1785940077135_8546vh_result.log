@@ -1,0 +1,38 @@
+[2026-08-05T14:28:32.140Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 16,\n      \"description\": \"Fallback to DATABASE_URL for migrations bypasses the intended SESSION-mode connection. If MIGRATION_DATABASE_URL is not set, the transaction pooler (port 6543) may be used for DDL, which the comments warn does not support prepared statements. This could fail silently or use a suboptimal connection.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/lib/db/index.ts\",\n      \"line\": 42,\n      \"description\": \"Global cache on globalThis without cleanup logic. In long-running processes or test environments, cached connections may persist across module reloads or contexts, potentially keeping stale Postgres client connections alive.\"\n    }\n  ],\n  \"riskScore\": 12,\n  \"recommendations\": [\n    \"Ensure MIGRATION_DATABASE_URL is always explicitly set in production CI/CD and documented in deployment guides. Consider throwing an error if both MIGRATION_DATABASE_URL and DATABASE_URL are missing, rather than silently falling back.\",\n    \"Add connection cleanup logic to handle module hot-reload in development. Consider adding a connection timeout or explicit cleanup on HMR refresh to avoid connection pool exhaustion.\",\n    \"Verify that all Clerk-protected routes in web/app/api/ validate authentication via requireReviewer() and that the proxy.ts matcher covers all sensitive endpoints. Spot-check one route handler to confirm.\",\n    \"Confirm that the engine never writes to sources or rulesets tables (table ownership enforced by code review, not by database-level permissions). Consider adding read-only database users for the engine layer.\",\n    \"Document the fact that VITE_CLERK_PUBLISHABLE_KEY is intentionally exposed to the client (Clerk keys are public by design) so future developers don't accidentally try to 'fix' this.\",\n    \"Audit .env template files to ensure no secrets are accidentally committed with placeholder values. Verify that .gitignore excludes all .env files.\",\n    \"Once the engine code is visible: verify that Salesforce, Databricks, Snowflake, and Anthropic API credentials are never logged or included in error messages.\"\n  ]\n}\n```\n\n**Summary:** The visible codebase shows strong security hygiene — credentials are server-only, the ORM prevents SQL injection, auth flows through Clerk, and table ownership is documented. The two findings are minor configuration risks, not breaches. \n\n**What you did right:**\n- ✅ `DATABASE_URL` is `\"server-only\"` — never exposed to client\n- ✅ Drizzle ORM prevents SQL injection\n- ✅ No hardcoded secrets in the provided files\n- ✅ Explicit warning against `NEXT_PUBLIC_` secrets\n- ✅ Clerk for authentication (established third-party provider)\n- ✅ Clear separation: web owns config (sources, rulesets), engine owns outputs (entities, conflicts, resolutions)\n\n**Remaining work:**\nThe engine layer (Python, Salesforce/Databricks connectors, LangGraph agent) is not shown here. Once visible, verify credential handling, API call validation, and output sanitization in that code.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "low",
+        "file": "web/drizzle.config.ts",
+        "line": 16,
+        "description": "Fallback to DATABASE_URL for migrations bypasses the intended SESSION-mode connection. If MIGRATION_DATABASE_URL is not set, the transaction pooler (port 6543) may be used for DDL, which the comments warn does not support prepared statements. This could fail silently or use a suboptimal connection."
+      },
+      {
+        "severity": "low",
+        "file": "web/lib/db/index.ts",
+        "line": 42,
+        "description": "Global cache on globalThis without cleanup logic. In long-running processes or test environments, cached connections may persist across module reloads or contexts, potentially keeping stale Postgres client connections alive."
+      }
+    ],
+    "riskScore": 12,
+    "recommendations": [
+      "Ensure MIGRATION_DATABASE_URL is always explicitly set in production CI/CD and documented in deployment guides. Consider throwing an error if both MIGRATION_DATABASE_URL and DATABASE_URL are missing, rather than silently falling back.",
+      "Add connection cleanup logic to handle module hot-reload in development. Consider adding a connection timeout or explicit cleanup on HMR refresh to avoid connection pool exhaustion.",
+      "Verify that all Clerk-protected routes in web/app/api/ validate authentication via requireReviewer() and that the proxy.ts matcher covers all sensitive endpoints. Spot-check one route handler to confirm.",
+      "Confirm that the engine never writes to sources or rulesets tables (table ownership enforced by code review, not by database-level permissions). Consider adding read-only database users for the engine layer.",
+      "Document the fact that VITE_CLERK_PUBLISHABLE_KEY is intentionally exposed to the client (Clerk keys are public by design) so future developers don't accidentally try to 'fix' this.",
+      "Audit .env template files to ensure no secrets are accidentally committed with placeholder values. Verify that .gitignore excludes all .env files.",
+      "Once the engine code is visible: verify that Salesforce, Databricks, Snowflake, and Anthropic API credentials are never logged or included in error messages."
+    ]
+  },
+  "durationMs": 35005,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T14:28:32.140Z",
+  "executionId": "audit_1785940077135_8546vh"
+}

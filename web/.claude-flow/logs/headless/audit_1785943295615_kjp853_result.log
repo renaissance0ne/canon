@@ -1,0 +1,71 @@
+[2026-08-05T15:22:32.530Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": 15,\n      \"description\": \"Hardcoded database credentials exposed in version control. DATABASE_URL contains Supabase connection string with username and password in plaintext.\"\n    },\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": 22,\n      \"description\": \"Hardcoded Clerk secret key exposed. CLERK_SECRET_KEY contains test secret key that should never be committed to repository.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \".gitignore\",\n      \"line\": 1,\n      \"description\": \".gitignore appears empty or missing entries. Must exclude .env, .env.local, .env.*.local, and node_modules to prevent credential leaks.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"package.json\",\n      \"line\": 1,\n      \"description\": \"No .npmrc with registry/auth configuration. Ensure private dependencies are not exposed; verify package-lock.json is properly secured if private packages are used.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"lib/db/index.ts\",\n      \"line\": 21,\n      \"description\": \"Database connection cached on globalThis. While necessary for Next.js HMR, ensure this doesn't lead to connection pool exhaustion in production. Monitor connection lifecycle.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"lib/db/schema.ts\",\n      \"line\": 48,\n      \"description\": \"Schema comment states 'NEVER credentials' but this is enforced only by convention. Consider adding runtime validation to reject config objects containing sensitive keys like 'password' or 'apiKey'.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"drizzle.config.ts\",\n      \"line\": 1,\n      \"description\": \"Drizzle config references process.env directly. While db credentials are needed for migrations, ensure drizzle.config.ts is never bundled into client code (it shouldn't be).\"\n    }\n  ],\n  \"riskScore\": 72,\n  \"recommendations\": [\n    \"IMMEDIATE: Remove .env file from git history using 'git filter-branch' or 'git-filter-repo'. Rotate all exposed credentials (Supabase password, Clerk keys).\",\n    \"IMMEDIATE: Create proper .gitignore with entries: .env, .env.local, .env.*.local, *.pem, node_modules/, .DS_Store, .next/, dist/, build/\",\n    \"Add pre-commit hook using husky to prevent committing .env files: 'npx husky add .husky/pre-commit \\\"npx lint-staged\\\"' with lint-staged checking for env files\",\n    \"Implement environment variable validation at startup: validate all required env vars are set and log warnings if any contain example values\",\n    \"Use a secrets manager (Vercel Secrets, AWS Secrets Manager, HashiCorp Vault) in production instead of .env files\",\n    \"Enable GitHub's secret scanning and configure branch protection to block commits containing known secret patterns\",\n    \"Run 'npm audit' regularly and integrate it into CI/CD pipeline. Pin security-critical versions of dependencies.\",\n    \"Add OWASP Top 10 security headers middleware for Next.js (X-Content-Type-Options, X-Frame-Options, Content-Security-Policy)\",\n    \"Review and test the 'server-only' module enforcement - verify DATABASE_URL cannot be accessed from client components\",\n    \"Document security model in AGENTS.md or SECURITY.md: clarify which env vars are secrets, which can be public, credential rotation procedures\"\n  ]\n}\n```\n\n**Summary:** The codebase has **critical security issues** related to hardcoded secrets in `.env`, combined with an empty `.gitignore`. The good news is authentication, authorization, and input validation patterns are sound (Clerk integration, protected-first design, Zod schemas, Drizzle ORM). The immediate priority is rotating exposed credentials and preventing future exposure via `.gitignore` and pre-commit hooks.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": 15,
+        "description": "Hardcoded database credentials exposed in version control. DATABASE_URL contains Supabase connection string with username and password in plaintext."
+      },
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": 22,
+        "description": "Hardcoded Clerk secret key exposed. CLERK_SECRET_KEY contains test secret key that should never be committed to repository."
+      },
+      {
+        "severity": "high",
+        "file": ".gitignore",
+        "line": 1,
+        "description": ".gitignore appears empty or missing entries. Must exclude .env, .env.local, .env.*.local, and node_modules to prevent credential leaks."
+      },
+      {
+        "severity": "medium",
+        "file": "package.json",
+        "line": 1,
+        "description": "No .npmrc with registry/auth configuration. Ensure private dependencies are not exposed; verify package-lock.json is properly secured if private packages are used."
+      },
+      {
+        "severity": "medium",
+        "file": "lib/db/index.ts",
+        "line": 21,
+        "description": "Database connection cached on globalThis. While necessary for Next.js HMR, ensure this doesn't lead to connection pool exhaustion in production. Monitor connection lifecycle."
+      },
+      {
+        "severity": "low",
+        "file": "lib/db/schema.ts",
+        "line": 48,
+        "description": "Schema comment states 'NEVER credentials' but this is enforced only by convention. Consider adding runtime validation to reject config objects containing sensitive keys like 'password' or 'apiKey'."
+      },
+      {
+        "severity": "low",
+        "file": "drizzle.config.ts",
+        "line": 1,
+        "description": "Drizzle config references process.env directly. While db credentials are needed for migrations, ensure drizzle.config.ts is never bundled into client code (it shouldn't be)."
+      }
+    ],
+    "riskScore": 72,
+    "recommendations": [
+      "IMMEDIATE: Remove .env file from git history using 'git filter-branch' or 'git-filter-repo'. Rotate all exposed credentials (Supabase password, Clerk keys).",
+      "IMMEDIATE: Create proper .gitignore with entries: .env, .env.local, .env.*.local, *.pem, node_modules/, .DS_Store, .next/, dist/, build/",
+      "Add pre-commit hook using husky to prevent committing .env files: 'npx husky add .husky/pre-commit \"npx lint-staged\"' with lint-staged checking for env files",
+      "Implement environment variable validation at startup: validate all required env vars are set and log warnings if any contain example values",
+      "Use a secrets manager (Vercel Secrets, AWS Secrets Manager, HashiCorp Vault) in production instead of .env files",
+      "Enable GitHub's secret scanning and configure branch protection to block commits containing known secret patterns",
+      "Run 'npm audit' regularly and integrate it into CI/CD pipeline. Pin security-critical versions of dependencies.",
+      "Add OWASP Top 10 security headers middleware for Next.js (X-Content-Type-Options, X-Frame-Options, Content-Security-Policy)",
+      "Review and test the 'server-only' module enforcement - verify DATABASE_URL cannot be accessed from client components",
+      "Document security model in AGENTS.md or SECURITY.md: clarify which env vars are secrets, which can be public, credential rotation procedures"
+    ]
+  },
+  "durationMs": 56915,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T15:22:32.530Z",
+  "executionId": "audit_1785943295615_kjp853"
+}

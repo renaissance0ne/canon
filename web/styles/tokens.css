@@ -82,6 +82,30 @@
   }
 }
 
+/* ── The one animated moment ───────────────────────────────────────────────
+   When a run completes, its output arrives in order of severity: a 120ms fade
+   at 20ms intervals. Nothing else in the app animates on entry — everything
+   else is an 80ms opacity/border transition on hover and focus.
+
+   Set --stagger-index on each row; the delay falls out of it.
+   ─────────────────────────────────────────────────────────────────────── */
+@keyframes canon-stagger-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@utility stagger-in {
+  animation: canon-stagger-in 120ms var(--ease-canon) both;
+  animation-delay: calc(var(--stagger-index, 0) * 20ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Disable the stagger, keep the fade instant. The base rule above already
+     collapses the duration; the delay has to go with it or rows would still
+     appear one at a time, just abruptly. */
+  .stagger-in { animation-delay: 0ms !important; }
+}
+
 /* ── Glass layer ───────────────────────────────────────────────────────────
    AGENTS.md forbids shadows, gradients and glows on SURFACES. Glass here is
    scoped to floating chrome only — the rail veil, sticky headers, overlays —
@@ -104,21 +128,80 @@
   border: 1px solid color-mix(in oklab, var(--color-g-900) 12%, transparent);
 }
 
-/* Veil: bordered on one edge only — used by the 240px rail and sticky headers. */
+/* Veil: bordered on one edge only — used by the 240px rail and sticky headers.
+
+   88%, not the 62% this started at. Every element wearing this is sticky, which
+   means real content scrolls underneath it, and at 62% a line of mono still
+   reads straight through the bar and collides with the labels on top of it.
+   Blur alone does not fix that — blurred text is still dark pixels. The veil
+   has to be opaque enough to win, and 88% is the point where it does while the
+   frost is still visible. */
 @utility glass-veil {
-  background-color: color-mix(in oklab, var(--color-g-0) 62%, transparent);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background-color: color-mix(in oklab, var(--color-g-0) 88%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
-/* The thing glass blurs against. Hairlines at --g-300 on a 40px field: enough
-   contrast that the blur is actually visible through the chrome above it, and
-   still zero hue and zero gradient. */
-@utility field-grid {
-  background-color: var(--color-surface-sunken);
-  background-image:
-    linear-gradient(to right, var(--color-g-300) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--color-g-300) 1px, transparent 1px);
-  background-size: 40px 40px;
-  background-position: -1px -1px;
+/* ── Gradual blur ──────────────────────────────────────────────────────────
+   A stack of layers with increasing blur and a matching mask, so content
+   dissolves into the surface at an edge rather than being cut by a hard line.
+   Layer count and per-layer strength are set inline by the component; these
+   two utilities only carry what cannot be expressed as a style prop.
+   ─────────────────────────────────────────────────────────────────────── */
+@utility gradual-blur-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  backdrop-filter: blur(var(--layer-blur));
+  -webkit-backdrop-filter: blur(var(--layer-blur));
+  mask-image: var(--layer-mask);
+  -webkit-mask-image: var(--layer-mask);
+}
+
+/* ── Logo loop ─────────────────────────────────────────────────────────────
+   Two identical tracks translating left by exactly half the rendered width,
+   so the seam lands on a duplicate and the loop is invisible. Duration is set
+   from measured width, not guessed, so speed is constant regardless of how
+   many marks are in the strip.
+   ─────────────────────────────────────────────────────────────────────── */
+@keyframes canon-logo-loop {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+
+@utility logo-loop-track {
+  animation: canon-logo-loop var(--loop-duration, 40s) linear infinite;
+  animation-play-state: var(--loop-play-state, running);
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The strip is decorative. Stop it outright rather than collapsing the
+     duration, which would otherwise spin it at 0.01ms per cycle. */
+  .logo-loop-track { animation: none !important; }
+}
+
+/* ── Spotlight ─────────────────────────────────────────────────────────────
+   Achromatic: the pool is --g-0 lifting a --g-50 card toward white, not a hue.
+   Position comes from two custom properties the component writes on pointer
+   move; with no pointer the layer is simply transparent.
+   ─────────────────────────────────────────────────────────────────────── */
+@utility spotlight-pool {
+  background: radial-gradient(
+    circle var(--spotlight-radius, 260px) at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+    color-mix(in oklab, var(--color-g-0) 92%, transparent),
+    transparent 70%
+  );
+}
+
+/* ── Caret ─────────────────────────────────────────────────────────────────
+   The typewriter's cursor. A block, not a line — it reads as a terminal.
+   ─────────────────────────────────────────────────────────────────────── */
+@keyframes canon-caret {
+  0%, 45%   { opacity: 1; }
+  55%, 100% { opacity: 0; }
+}
+
+@utility caret-blink {
+  animation: canon-caret 1.06s steps(1, end) infinite;
 }

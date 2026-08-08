@@ -17,7 +17,7 @@ export function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="field-grid flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col bg-surface-sunken">
       <div className="mx-auto w-full max-w-[1120px] px-8 py-8">
         <Link href="/" className="no-underline">
           <CanonLockup size={18} />

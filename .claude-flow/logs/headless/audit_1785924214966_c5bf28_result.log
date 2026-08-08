@@ -1,0 +1,41 @@
+[2026-08-05T10:04:16.376Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Looking at this codebase, I'll analyze the provided files for security vulnerabilities. Note that most `.agents/skills/` files are templates/examples, while the actual application code is under `web/lib/`.\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/lib/db/index.ts\",\n      \"line\": 32,\n      \"description\": \"Database connection object cached on globalThis. While server-only, this could expose sensitive connection details in error stack traces if not carefully handled. Ensure error logging doesn't expose connection URL in production.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 11,\n      \"description\": \"MIGRATION_DATABASE_URL falls back to DATABASE_URL silently. Consider requiring explicit separation of migration and application connections in production to prevent accidental connection pooler use during migrations.\"\n    }\n  ],\n  \"riskScore\": 15,\n  \"recommendations\": [\n    \"✓ VERIFIED: All secrets are environment-variable managed, never hardcoded. Database URLs (DATABASE_URL, MIGRATION_DATABASE_URL) read from env only.\",\n    \"✓ VERIFIED: SQL injection protection — using Drizzle ORM with typed queries throughout. No raw SQL strings found.\",\n    \"✓ VERIFIED: XSS protection — all code is server-side or uses framework defaults (Next.js escapes by default). Reviewer labels come from Clerk server, not client input.\",\n    \"✓ VERIFIED: Authentication/Authorization — Clerk middleware protecting routes via proxy.ts matcher. `requireReviewer()` properly validates before audit log writes.\",\n    \"✓ VERIFIED: Sensitive data isolation — 'server-only' imports prevent database credentials reaching client bundles. Schema comments explicitly forbid credentials in jsonb config.\",\n    \"⚠ ACTION: Verify Zod schemas in `/types/source.ts` validate `SourceConfig` strictly — prevent any credential-shaped fields from being stored in the database.\",\n    \"⚠ ACTION: Confirm Clerk token handling in route handlers uses httpOnly cookies and CSRF protection (not visible in snippets).\",\n    \"⚠ ACTION: Engine API (`POST {ENGINE_URL}/runs`) — verify authentication between web and engine. Code doesn't show how `ENGINE_URL` connection is authenticated; this could be a lateral-movement risk.\",\n    \"⚠ ACTION: Audit trail immutability — ensure `audit_log` inserts are append-only at the database level (no UPDATE/DELETE permissions). Schema doesn't show CHECK constraints.\",\n    \"📋 RECOMMENDED: Document the table-ownership boundary (§ web writes config, engine writes run output) in database-level comments or a policy document, since this is enforced by code convention, not database constraints.\"\n  ]\n}\n```\n\n### Summary\n\n**No critical vulnerabilities found** in the code shown. The architecture follows defense-in-depth practices:\n\n- **Secrets management**: Clean. Environment variables only, no hardcoding, Clerk publishable key correctly exposed (it's non-secret).\n- **Database access**: Safe. Drizzle ORM prevents SQL injection, server-only isolation prevents connection string leaks.\n- **Authentication**: Sound. Clerk middleware + `requireReviewer()` validation before audit writes.\n\n**Main gaps** (unverifiable from these snippets):\n1. The **engine-to-database connection** isn't shown — verify this is authenticated (API key? mTLS?).\n2. **Zod schema strictness** — the tool contract depends on validation schemas not shown here.\n3. **Database constraints** — table ownership is code-enforced only; no CHECK constraints visible to prevent a buggy INSERT.\n\nThe **risk score of 15** reflects \"well-hardened template code with architectural patterns in place\" — risks are in integration and validation logic not shown, not in the visible code itself.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "low",
+        "file": "web/lib/db/index.ts",
+        "line": 32,
+        "description": "Database connection object cached on globalThis. While server-only, this could expose sensitive connection details in error stack traces if not carefully handled. Ensure error logging doesn't expose connection URL in production."
+      },
+      {
+        "severity": "low",
+        "file": "web/drizzle.config.ts",
+        "line": 11,
+        "description": "MIGRATION_DATABASE_URL falls back to DATABASE_URL silently. Consider requiring explicit separation of migration and application connections in production to prevent accidental connection pooler use during migrations."
+      }
+    ],
+    "riskScore": 15,
+    "recommendations": [
+      "✓ VERIFIED: All secrets are environment-variable managed, never hardcoded. Database URLs (DATABASE_URL, MIGRATION_DATABASE_URL) read from env only.",
+      "✓ VERIFIED: SQL injection protection — using Drizzle ORM with typed queries throughout. No raw SQL strings found.",
+      "✓ VERIFIED: XSS protection — all code is server-side or uses framework defaults (Next.js escapes by default). Reviewer labels come from Clerk server, not client input.",
+      "✓ VERIFIED: Authentication/Authorization — Clerk middleware protecting routes via proxy.ts matcher. `requireReviewer()` properly validates before audit log writes.",
+      "✓ VERIFIED: Sensitive data isolation — 'server-only' imports prevent database credentials reaching client bundles. Schema comments explicitly forbid credentials in jsonb config.",
+      "⚠ ACTION: Verify Zod schemas in `/types/source.ts` validate `SourceConfig` strictly — prevent any credential-shaped fields from being stored in the database.",
+      "⚠ ACTION: Confirm Clerk token handling in route handlers uses httpOnly cookies and CSRF protection (not visible in snippets).",
+      "⚠ ACTION: Engine API (`POST {ENGINE_URL}/runs`) — verify authentication between web and engine. Code doesn't show how `ENGINE_URL` connection is authenticated; this could be a lateral-movement risk.",
+      "⚠ ACTION: Audit trail immutability — ensure `audit_log` inserts are append-only at the database level (no UPDATE/DELETE permissions). Schema doesn't show CHECK constraints.",
+      "📋 RECOMMENDED: Document the table-ownership boundary (§ web writes config, engine writes run output) in database-level comments or a policy document, since this is enforced by code convention, not database constraints."
+    ]
+  },
+  "durationMs": 41410,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T10:04:16.376Z",
+  "executionId": "audit_1785924214966_c5bf28"
+}

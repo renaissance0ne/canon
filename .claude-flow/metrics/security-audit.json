@@ -1,68 +1,12 @@
 {
-  "timestamp": "2026-08-05T09:10:09.012Z",
-  "mode": "headless",
-  "workerType": "audit",
-  "model": "haiku",
-  "durationMs": 72617,
-  "executionId": "audit_1785920936395_owny8v",
-  "success": true,
-  "findings": {
-    "vulnerabilities": [
-      {
-        "severity": "critical",
-        "file": "web/.env",
-        "line": 11,
-        "description": "Exposed database credentials with real passwords in unencrypted plaintext. While correctly gitignored, if this file is ever accidentally committed or stored in version control, it exposes full database access to attackers. The credentials reveal Supabase instance, user, and password."
-      },
-      {
-        "severity": "critical",
-        "file": "web/.env",
-        "line": 30,
-        "description": "Clerk secret key (sk_test_...) stored in plaintext in .env file. If accidentally committed or accessed, attackers can impersonate the authentication provider and bypass all user authentication."
-      },
-      {
-        "severity": "medium",
-        "file": "web/drizzle.config.ts",
-        "line": 14,
-        "description": "Error message reveals database configuration structure: 'Set MIGRATION_DATABASE_URL (or DATABASE_URL)' leaks that environment variables control database setup. While not a direct vulnerability, it aids reconnaissance by confirming the tech stack."
-      },
-      {
-        "severity": "medium",
-        "file": "web/lib/db/index.ts",
-        "line": 30,
-        "description": "Prepared statements disabled (prepare: false) for Supabase transaction mode. While documented as necessary, this reduces protection against SQL injection if raw SQL is ever used. Mitigation depends entirely on ORM (Drizzle) never generating raw SQL."
-      },
-      {
-        "severity": "medium",
-        "file": "web/app/(console)",
-        "line": 0,
-        "description": "No visible Content-Security-Policy (CSP) headers configured. CSP is important defense-in-depth for XSS attacks. Next.js has reasonable defaults but explicit CSP headers strengthen security posture."
-      },
-      {
-        "severity": "low",
-        "file": ".agents/skills/clerk-backend-api/scripts/extract-tags.js",
-        "line": 11,
-        "description": "Regex pattern uses greedy matcher (.+) without bounds validation. While not exploitable in this YAML parsing context, it could be a source of ReDoS if processing untrusted input at scale."
-      }
-    ],
-    "riskScore": 72,
-    "recommendations": [
-      "IMMEDIATELY: Rotate all database credentials shown in .env (Supabase). If this file has been accessed by unauthorized parties, reset the database password through Supabase console.",
-      "IMMEDIATELY: Rotate Clerk secret key. Go to Clerk Dashboard → Settings → API Keys and regenerate the secret key.",
-      "Verify .env and .env.* are in .gitignore (they are, verified) and never committed. Run 'git log -S CLERK_SECRET_KEY' to confirm no secrets were accidentally committed in the past.",
-      "Implement automatic secrets scanning in CI/CD (e.g., using git-secrets, TruffleHog) to prevent accidental commits of credentials.",
-      "Add explicit Content-Security-Policy headers via Next.js `next.config.js` or middleware to defend against XSS: restrict script sources, object sources, and embedding.",
-      "Document that prepared statements are disabled as a Supabase transaction-mode trade-off. Add linting rule to prevent raw SQL queries and enforce Drizzle ORM usage.",
-      "Consider using Supabase's Session mode (port 5432) for all connections if possible, which supports prepared statements for stronger injection defense.",
-      "Implement HSTS (Strict-Transport-Security) headers to enforce HTTPS only.",
-      "Enable Clerk's bot protection and CAPTCHA for sign-in/sign-up forms to defend against credential stuffing.",
-      "Use environment variable validation on startup: fail fast if any required secret is missing, rather than deferring to first use.",
-      "Audit Clerk's NEXT_PUBLIC_ variables — these are intentionally public, but verify no other secrets are exposed to the client bundle.",
-      "Implement rate limiting on API routes (especially auth and review actions) to mitigate brute-force attacks.",
-      "Add database connection encryption (SSL/TLS) — verify Supabase connection uses `sslmode=require`.",
-      "Restrict regex in extract-tags.js: change `.+` to `[^\\n]+` to fail fast on malformed input."
-    ]
+  "timestamp": "2026-08-08T07:54:01.144Z",
+  "mode": "local",
+  "checks": {
+    "envFilesProtected": true,
+    "gitIgnoreExists": true,
+    "noHardcodedSecrets": true
   },
-  "rawOutputPreview": "Now let me compile the comprehensive security analysis report based on my findings:\n\n## Security Analysis Report\n\nBased on my thorough analysis of the Canon codebase, here is the security assessment:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"critical\",\n      \"file\": \"web/.env\",\n      \"line\": 11,\n      \"description\": \"Exposed database credentials with real passwords in unencrypted plaintext. While correctly gitignored, if this file is ever accidentally committed or stored in version control, it exposes full database access to attackers. The credentials reveal Supabase instance, user, and password.\"\n    },\n    {\n      \"severity\": \"critical\", \n      \"file\": \"web/.env\",\n      \"line\": 30,\n      \"description\": \"Clerk secret key (sk_test_...) stored in plaintext in .env file. If accidentally committed or accessed, attackers can impersonate the authentication provider and bypass all user authentication.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 14,\n      \"description\": \"Error message reveals database configuration structure: 'Set MIGRATION_DATABASE_URL (or DATABASE_URL)' leaks that environment variables control database setup. While not a direct vulnerability, it aids reconnaissance by confirming the tech stack.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/lib/db/index.ts\",\n      \"line\": 30,\n      \"description\": \"Prepared statements disabled (prepare: false) for Supabase transaction mode. While documented as necessary, this reduces protection against SQL injection if raw SQL is ever used. Mitigation depends entirely on ORM (Drizzle) never generating raw SQL.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/app/(console)\",\n      \"line\": 0,\n      \"description\": \"No visible Content-Security-Policy (CSP) headers configured. CSP is important defense-in-depth for XSS attacks. Next.js has reasonable defaults but explicit CSP headers strengthen security posture.\"\n    },\n    {\n      \"se",
-  "rawOutputLength": 5231
+  "riskLevel": "low",
+  "recommendations": [],
+  "note": "Install Claude Code CLI for AI-powered security analysis"
 }

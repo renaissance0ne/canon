@@ -58,3 +58,22 @@ export const SEVERITY_LABEL: Record<Severity, string> = {
   2: "Attribute",
   1: "Cosmetic",
 };
+
+/**
+ * Levels 3 and 2 are both "Attribute" and a queue has to tell them apart, so the
+ * histogram in wireframe 1g disambiguates by number. The word still leads.
+ */
+export const SEVERITY_HISTOGRAM_LABEL: Record<Severity, string> = {
+  4: "Structural",
+  3: "Attribute · 3",
+  2: "Attribute · 2",
+  1: "Cosmetic",
+};
+
+/** Highest first — a reviewer works a queue top-down by what breaks rollups. */
+export const SEVERITY_ORDER = [4, 3, 2, 1] as const satisfies readonly Severity[];
+
+/** How many conflicts a run found at each level. Drives the 1g histogram. */
+export type SeverityBreakdown = Record<Severity, number>;
+
+export const EMPTY_SEVERITY_BREAKDOWN: SeverityBreakdown = { 4: 0, 3: 0, 2: 0, 1: 0 };

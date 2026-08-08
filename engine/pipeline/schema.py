@@ -30,6 +30,11 @@ MatchMethod = Literal["exact_key", "embedding", "fuzzy", "agent"]
 ResolutionStatus = Literal[
     "proposed", "auto_applied", "escalated", "approved", "rejected", "overridden"
 ]
+#: The engine writes the first five and the last; the web layer writes the
+#: human_* three. ``human_rejected`` is not in AGENTS.md § Database Schema's
+#: list — it has to exist, because a rejection recorded as any other action
+#: would put a false statement in the one table that is beyond dispute.
+#: Mirrored in web/types/resolution.ts::auditActionSchema.
 AuditAction = Literal[
     "run_started",
     "conflict_detected",
@@ -37,6 +42,7 @@ AuditAction = Literal[
     "auto_applied",
     "escalated",
     "human_approved",
+    "human_rejected",
     "human_overridden",
     "run_failed",
 ]

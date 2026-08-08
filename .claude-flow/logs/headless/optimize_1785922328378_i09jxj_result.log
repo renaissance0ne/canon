@@ -1,0 +1,73 @@
+[2026-08-05T09:34:26.903Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "The codebase is an early-stage scaffold — this changes the shape of a meaningful answer, so here it is grounded in what's actually there rather than invented examples.\n\n## Reality check\n\nMost of the requested categories (N+1 queries in loops, React re-render cascades, memory leaks from subscriptions) don't apply yet because the code that would exhibit them doesn't exist:\n\n- No `web/app/api/**/route.ts` handlers at all\n- No TanStack Query/SWR, no polling anywhere\n- No `useEffect`/`useState`/Context providers in any client component (8 total `\"use client\"` files, none with local state)\n- `engine/pipeline/*.py`, `engine/agent/*.py`, `engine/db.py` are all `raise NotImplementedError` stubs — no matching, blocking, embedding, LLM-call, or DB-write logic exists yet\n\nSo instead of manufacturing findings, here's what's real, plus what to watch for once Phase 2–5 land.\n\n## 1. N+1 queries — 1 real finding\n\n`web/lib/server/sources.ts:13-30` — `countSourcesBySide()` calls `listSources()` independently of any other caller of `listSources()`. If a future page needs both the table and the counts, that's two round trips for the same data.\n\n```ts\n// current\nexport async function listSources() {\n  return getDb().select().from(sources);\n}\nexport async function countSourcesBySide() {\n  const all = await listSources(); // separate query if listSources() was already called this request\n  ...\n}\n```\nFix once a page needs both: pass the already-fetched rows into `countSourcesBySide(all)` rather than re-querying, or wrap `listSources` in React's `cache()` (see §3).\n\n**Watch for later:** `engine/db.py` write functions (`write_entities`, `write_matches`, `write_conflicts`) are stubs. When implemented, batch inserts with `psycopg`'s `executemany`/`COPY`, not a per-row `INSERT` in the entity/match loop — this is exactly where an engine-side N+1 would appear first.\n\n## 2. React re-renders — no substantive findings\n\nNothing to fix today. For when client state and TanStack Query polling arrive per `AGENTS.md` (run status polling):\n\n```tsx\n// when you add this, scope invalidation/staleTime so it doesn't refetch the whole run tree\nuseQuery({\n  queryKey: [\"run\", runId, \"status\"],\n  queryFn: () => fetchRunStatus(runId),\n  refetchInterval: (data) => data?.status === \"complete\" ? false : 2000, // stop polling once done\n});\n```\nAnd when the conflict queue (`j`/`k` keyboard nav per the design system) is built, memoize row click handlers so a 400-row list doesn't regenerate 400 closures per keystroke:\n```tsx\nconst handleApprove = useCallback((id: string) => approve(id), []);\n```\n\n## 3. Caching — 1 real finding\n\nSame `sources.ts` file: `listSources()` isn't wrapped in React's `cache()`, so any RSC tree that calls it twice per request pays twice. Given the file deliberately calls `connection()` to force dynamic rendering (per its own comment), wrap the query itself, not the page:\n\n```ts\nimport { cache } from \"react\";\n\nexport const listSources = cache(async () => {\n  return getDb().select().from(sources);\n});\n```\nThis dedupes within a single request without fighting the intentional dynamic-rendering choice.\n\n**Watch for later:** per `AGENTS.md`, prompt caching on the ruleset block is called out as \"the single largest cost lever\" for the agent — when `engine/agent/graph.py` gets a real body, make sure the Anthropic client call sets `cache_control` on the ruleset block, not the whole prompt.\n\n## 4. Memory leaks — none found, one good pattern already in place\n\n`web/lib/db/index.ts:22-25` caches the Postgres pool on `globalThis` specifically to survive Next.js HMR reloads in dev — this is leak *prevention*, already correct, don't touch it.\n\nNothing to flag in `engine/` — no connections are opened yet. When `engine/db.py` is implemented, use a `psycopg` connection pool (not a raw `connect()` per request) and make sure `main.py`'s run orchestration closes/returns connections in a `finally`.\n\n## 5. Redundant computations — 2 minor findings\n\n`web/lib/server/sources.ts:25-28` — three separate `.filter()` passes over the same array where one pass suffices:\n\n```ts\n// current: 3 traversals\ncrm: all.filter((s) => s.kind === \"salesforce\" || s.kind === \"hubspot\").length,\nwarehouse: all.filter((s) => s.kind === \"databricks\" || s.kind === \"snowflake\").length,\nsynthetic: all.filter((s) => s.kind === \"synthetic\").length,\n\n// single pass\nconst counts = all.reduce(\n  (acc, s) => {\n    if (s.kind === \"salesforce\" || s.kind === \"hubspot\") acc.crm++;\n    else if (s.kind === \"databricks\" || s.kind === \"snowflake\") acc.warehouse++;\n    else if (s.kind === \"synthetic\") acc.synthetic++;\n    return acc;\n  },\n  { crm: 0, warehouse: 0, synthetic: 0 }\n);\n```\nInconsequential at current table sizes, worth doing while you're already touching the file.\n\n`web/components/sources/source-table.tsx:29` — `source.config.objects.join(\", \")` runs inline in JSX. Server-rendered, one array join, negligible — not worth changing on its own.\n\n## Bottom line\n\nReal, actionable fixes today are limited to `web/lib/server/sources.ts` (dedupe the query, collapse the triple-filter) — both small. The categories you asked about (N+1, re-renders, LLM caching, memory leaks) are the right things to watch, but the code that would trigger them — API routes, the pipeline, the resolution agent, TanStack Query polling — hasn't been built yet per the Phase 1–5 build order in `AGENTS.md`. Worth re-running this analysis once `engine/pipeline/blocking.py`, `engine/agent/graph.py`, `engine/db.py`, and `web/app/api/**` have real implementations.\n",
+  "parsedOutput": {
+    "sections": [
+      {
+        "title": "Reality check",
+        "content": "\nMost of the requested categories (N+1 queries in loops, React re-render cascades, memory leaks from subscriptions) don't apply yet because the code that would exhibit them doesn't exist:\n\n- No `web/app/api/**/route.ts` handlers at all\n- No TanStack Query/SWR, no polling anywhere\n- No `useEffect`/`useState`/Context providers in any client component (8 total `\"use client\"` files, none with local state)\n- `engine/pipeline/*.py`, `engine/agent/*.py`, `engine/db.py` are all `raise NotImplementedError` stubs — no matching, blocking, embedding, LLM-call, or DB-write logic exists yet\n\nSo instead of manufacturing findings, here's what's real, plus what to watch for once Phase 2–5 land.\n\n",
+        "level": 2
+      },
+      {
+        "title": "1. N+1 queries — 1 real finding",
+        "content": "\n`web/lib/server/sources.ts:13-30` — `countSourcesBySide()` calls `listSources()` independently of any other caller of `listSources()`. If a future page needs both the table and the counts, that's two round trips for the same data.\n\n```ts\n// current\nexport async function listSources() {\n  return getDb().select().from(sources);\n}\nexport async function countSourcesBySide() {\n  const all = await listSources(); // separate query if listSources() was already called this request\n  ...\n}\n```\nFix once a page needs both: pass the already-fetched rows into `countSourcesBySide(all)` rather than re-querying, or wrap `listSources` in React's `cache()` (see §3).\n\n**Watch for later:** `engine/db.py` write functions (`write_entities`, `write_matches`, `write_conflicts`) are stubs. When implemented, batch inserts with `psycopg`'s `executemany`/`COPY`, not a per-row `INSERT` in the entity/match loop — this is exactly where an engine-side N+1 would appear first.\n\n",
+        "level": 2
+      },
+      {
+        "title": "2. React re-renders — no substantive findings",
+        "content": "\nNothing to fix today. For when client state and TanStack Query polling arrive per `AGENTS.md` (run status polling):\n\n```tsx\n// when you add this, scope invalidation/staleTime so it doesn't refetch the whole run tree\nuseQuery({\n  queryKey: [\"run\", runId, \"status\"],\n  queryFn: () => fetchRunStatus(runId),\n  refetchInterval: (data) => data?.status === \"complete\" ? false : 2000, // stop polling once done\n});\n```\nAnd when the conflict queue (`j`/`k` keyboard nav per the design system) is built, memoize row click handlers so a 400-row list doesn't regenerate 400 closures per keystroke:\n```tsx\nconst handleApprove = useCallback((id: string) => approve(id), []);\n```\n\n",
+        "level": 2
+      },
+      {
+        "title": "3. Caching — 1 real finding",
+        "content": "\nSame `sources.ts` file: `listSources()` isn't wrapped in React's `cache()`, so any RSC tree that calls it twice per request pays twice. Given the file deliberately calls `connection()` to force dynamic rendering (per its own comment), wrap the query itself, not the page:\n\n```ts\nimport { cache } from \"react\";\n\nexport const listSources = cache(async () => {\n  return getDb().select().from(sources);\n});\n```\nThis dedupes within a single request without fighting the intentional dynamic-rendering choice.\n\n**Watch for later:** per `AGENTS.md`, prompt caching on the ruleset block is called out as \"the single largest cost lever\" for the agent — when `engine/agent/graph.py` gets a real body, make sure the Anthropic client call sets `cache_control` on the ruleset block, not the whole prompt.\n\n",
+        "level": 2
+      },
+      {
+        "title": "4. Memory leaks — none found, one good pattern already in place",
+        "content": "\n`web/lib/db/index.ts:22-25` caches the Postgres pool on `globalThis` specifically to survive Next.js HMR reloads in dev — this is leak *prevention*, already correct, don't touch it.\n\nNothing to flag in `engine/` — no connections are opened yet. When `engine/db.py` is implemented, use a `psycopg` connection pool (not a raw `connect()` per request) and make sure `main.py`'s run orchestration closes/returns connections in a `finally`.\n\n",
+        "level": 2
+      },
+      {
+        "title": "5. Redundant computations — 2 minor findings",
+        "content": "\n`web/lib/server/sources.ts:25-28` — three separate `.filter()` passes over the same array where one pass suffices:\n\n```ts\n// current: 3 traversals\ncrm: all.filter((s) => s.kind === \"salesforce\" || s.kind === \"hubspot\").length,\nwarehouse: all.filter((s) => s.kind === \"databricks\" || s.kind === \"snowflake\").length,\nsynthetic: all.filter((s) => s.kind === \"synthetic\").length,\n\n// single pass\nconst counts = all.reduce(\n  (acc, s) => {\n    if (s.kind === \"salesforce\" || s.kind === \"hubspot\") acc.crm++;\n    else if (s.kind === \"databricks\" || s.kind === \"snowflake\") acc.warehouse++;\n    else if (s.kind === \"synthetic\") acc.synthetic++;\n    return acc;\n  },\n  { crm: 0, warehouse: 0, synthetic: 0 }\n);\n```\nInconsequential at current table sizes, worth doing while you're already touching the file.\n\n`web/components/sources/source-table.tsx:29` — `source.config.objects.join(\", \")` runs inline in JSX. Server-rendered, one array join, negligible — not worth changing on its own.\n\n",
+        "level": 2
+      },
+      {
+        "title": "Bottom line",
+        "content": "Real, actionable fixes today are limited to `web/lib/server/sources.ts` (dedupe the query, collapse the triple-filter) — both small. The categories you asked about (N+1, re-renders, LLM caching, memory leaks) are the right things to watch, but the code that would trigger them — API routes, the pipeline, the resolution agent, TanStack Query polling — hasn't been built yet per the Phase 1–5 build order in `AGENTS.md`. Worth re-running this analysis once `engine/pipeline/blocking.py`, `engine/agent/graph.py`, `engine/db.py`, and `web/app/api/**` have real implementations.",
+        "level": 2
+      }
+    ],
+    "codeBlocks": [
+      {
+        "language": "ts",
+        "code": "// current\nexport async function listSources() {\n  return getDb().select().from(sources);\n}\nexport async function countSourcesBySide() {\n  const all = await listSources(); // separate query if listSources() was already called this request\n  ...\n}"
+      },
+      {
+        "language": "tsx",
+        "code": "// when you add this, scope invalidation/staleTime so it doesn't refetch the whole run tree\nuseQuery({\n  queryKey: [\"run\", runId, \"status\"],\n  queryFn: () => fetchRunStatus(runId),\n  refetchInterval: (data) => data?.status === \"complete\" ? false : 2000, // stop polling once done\n});"
+      },
+      {
+        "language": "tsx",
+        "code": "const handleApprove = useCallback((id: string) => approve(id), []);"
+      },
+      {
+        "language": "ts",
+        "code": "import { cache } from \"react\";\n\nexport const listSources = cache(async () => {\n  return getDb().select().from(sources);\n});"
+      },
+      {
+        "language": "ts",
+        "code": "// current: 3 traversals\ncrm: all.filter((s) => s.kind === \"salesforce\" || s.kind === \"hubspot\").length,\nwarehouse: all.filter((s) => s.kind === \"databricks\" || s.kind === \"snowflake\").length,\nsynthetic: all.filter((s) => s.kind === \"synthetic\").length,\n\n// single pass\nconst counts = all.reduce(\n  (acc, s) => {\n    if (s.kind === \"salesforce\" || s.kind === \"hubspot\") acc.crm++;\n    else if (s.kind === \"databricks\" || s.kind === \"snowflake\") acc.warehouse++;\n    else if (s.kind === \"synthetic\") acc.synthetic++;\n    return acc;\n  },\n  { crm: 0, warehouse: 0, synthetic: 0 }\n);"
+      }
+    ]
+  },
+  "durationMs": 138525,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "optimize",
+  "timestamp": "2026-08-05T09:34:26.903Z",
+  "executionId": "optimize_1785922328378_i09jxj"
+}

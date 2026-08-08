@@ -1,0 +1,77 @@
+[2026-08-05T09:17:51.384Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Based on my analysis of the provided codebase, here's the security vulnerability report:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": 13,\n      \"description\": \"Hardcoded database password in committed .env file. Password 'ArlecchinoxZhongli' is plaintext in repository, exposing Supabase credentials to anyone with repo access.\"\n    },\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": 13,\n      \"description\": \"Database connection strings with credentials committed to version control. Both DATABASE_URL and MIGRATION_DATABASE_URL contain full PostgreSQL credentials (username:password@host).\"\n    },\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": 26,\n      \"description\": \"Clerk secret API key exposed in repository. CLERK_SECRET_KEY='sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf' must never be committed.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \".gitignore\",\n      \"line\": 0,\n      \"description\": \".gitignore file not found or does not exclude .env files. The file should contain '.env' and '.env.local' entries to prevent accidental commits of secrets.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"lib/db/index.ts\",\n      \"line\": 25,\n      \"description\": \"Prepared statements disabled (prepare: false) for Supabase compatibility. While necessary for transaction pooler mode, this increases SQL injection risk if raw SQL queries are introduced later.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"drizzle.config.ts\",\n      \"line\": 11,\n      \"description\": \"Migration database URL sourced from environment without validation. An attacker with control over MIGRATION_DATABASE_URL env var could redirect migrations to a compromised database.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \".env\",\n      \"line\": 20,\n      \"description\": \"ENGINE_URL set to localhost HTTP in .env. In production, this should enforce HTTPS and use environment-specific configuration rather than committed env vars.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"proxy.ts\",\n      \"line\": 11,\n      \"description\": \"Public routes configuration hardcoded in proxy.ts. Routing logic would be more maintainable and secure if managed through configuration.\"\n    }\n  ],\n  \"riskScore\": 92,\n  \"recommendations\": [\n    \"IMMEDIATE: Revoke the exposed Clerk secret key (sk_test_...) and database credentials (postgres.yenteczevefirhvgyvcu). These are compromised.\",\n    \"Create a .gitignore file with entries: .env, .env.local, .env.*.local to prevent future secret commits.\",\n    \"Move all secrets to environment variables managed by CI/CD platform (GitHub Secrets, deployment platform, etc.). The .env file shown should be .env.example with placeholder values only.\",\n    \"Use a pre-commit hook (husky + lint-staged) to scan for secrets before commit. Install: `npm install --save-dev husky lint-staged` and add secret scanning rules.\",\n    \"Rotate all exposed credentials immediately in Supabase and Clerk dashboards.\",\n    \"Enable branch protection on main/master to require PR reviews and prevent direct commits of secrets.\",\n    \"Consider using a tool like `git-secrets` or `detect-secrets` in CI/CD to catch secrets in commits.\",\n    \"Document in CONTRIBUTING.md that .env files should never be committed and should be populated from platform secrets.\",\n    \"For production deployments, ensure ENGINE_URL uses HTTPS and is configured per-environment.\",\n    \"Review git history to check if these secrets have been committed before. If so, treat all credentials as compromised.\"\n  ]\n}\n```\n\n**Summary:** The codebase has **critical security issues** stemming from hardcoded secrets (database credentials, API keys) in the committed `.env` file. This is the highest-severity finding. The good news is the code itself follows secure patterns (ORM usage, authentication middleware, server-only imports), but the exposed credentials override those protections.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": 13,
+        "description": "Hardcoded database password in committed .env file. Password 'ArlecchinoxZhongli' is plaintext in repository, exposing Supabase credentials to anyone with repo access."
+      },
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": 13,
+        "description": "Database connection strings with credentials committed to version control. Both DATABASE_URL and MIGRATION_DATABASE_URL contain full PostgreSQL credentials (username:password@host)."
+      },
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": 26,
+        "description": "Clerk secret API key exposed in repository. CLERK_SECRET_KEY='sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf' must never be committed."
+      },
+      {
+        "severity": "high",
+        "file": ".gitignore",
+        "line": 0,
+        "description": ".gitignore file not found or does not exclude .env files. The file should contain '.env' and '.env.local' entries to prevent accidental commits of secrets."
+      },
+      {
+        "severity": "high",
+        "file": "lib/db/index.ts",
+        "line": 25,
+        "description": "Prepared statements disabled (prepare: false) for Supabase compatibility. While necessary for transaction pooler mode, this increases SQL injection risk if raw SQL queries are introduced later."
+      },
+      {
+        "severity": "medium",
+        "file": "drizzle.config.ts",
+        "line": 11,
+        "description": "Migration database URL sourced from environment without validation. An attacker with control over MIGRATION_DATABASE_URL env var could redirect migrations to a compromised database."
+      },
+      {
+        "severity": "medium",
+        "file": ".env",
+        "line": 20,
+        "description": "ENGINE_URL set to localhost HTTP in .env. In production, this should enforce HTTPS and use environment-specific configuration rather than committed env vars."
+      },
+      {
+        "severity": "low",
+        "file": "proxy.ts",
+        "line": 11,
+        "description": "Public routes configuration hardcoded in proxy.ts. Routing logic would be more maintainable and secure if managed through configuration."
+      }
+    ],
+    "riskScore": 92,
+    "recommendations": [
+      "IMMEDIATE: Revoke the exposed Clerk secret key (sk_test_...) and database credentials (postgres.yenteczevefirhvgyvcu). These are compromised.",
+      "Create a .gitignore file with entries: .env, .env.local, .env.*.local to prevent future secret commits.",
+      "Move all secrets to environment variables managed by CI/CD platform (GitHub Secrets, deployment platform, etc.). The .env file shown should be .env.example with placeholder values only.",
+      "Use a pre-commit hook (husky + lint-staged) to scan for secrets before commit. Install: `npm install --save-dev husky lint-staged` and add secret scanning rules.",
+      "Rotate all exposed credentials immediately in Supabase and Clerk dashboards.",
+      "Enable branch protection on main/master to require PR reviews and prevent direct commits of secrets.",
+      "Consider using a tool like `git-secrets` or `detect-secrets` in CI/CD to catch secrets in commits.",
+      "Document in CONTRIBUTING.md that .env files should never be committed and should be populated from platform secrets.",
+      "For production deployments, ensure ENGINE_URL uses HTTPS and is configured per-environment.",
+      "Review git history to check if these secrets have been committed before. If so, treat all credentials as compromised."
+    ]
+  },
+  "durationMs": 39110,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T09:17:51.384Z",
+  "executionId": "audit_1785921432274_ja70sk"
+}

@@ -1,0 +1,59 @@
+[2026-08-05T15:22:51.511Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "I read through the full app (`app/`, `components/`, `lib/`, `types/` — ~30 files). Bottom line up front: this is a pre-scale Next.js 16 app — almost entirely Server Components, zero `useState`/`useEffect`/`useMemo` anywhere, one DB-backed page, no polling yet. Most of the categories you asked about (N+1 loops, re-render storms, memory leaks) genuinely don't exist yet because the surface area for them hasn't been built. I'm not going to manufacture findings — here's what's actually real, plus what to watch as it grows.\n\n## 1. Real issue: duplicate query risk in `lib/server/sources.ts`\n\n```ts\nexport async function countSourcesBySide() {\n  const all = await listSources();   // full SELECT + zod-parse of every row\n  return { crm: ..., warehouse: ..., synthetic: ... };\n}\n```\n\nNot an N+1 today (nothing currently calls both in the same request), but it's a landmine: the moment a future page needs both the full list *and* the counts (e.g. a dashboard header), you get two separate round trips fetching identical rows. Two fixes, do both:\n\n**Dedupe with React's `cache()`** so repeated calls in one request hit Postgres once:\n```ts\nimport { cache } from \"react\";\n\nexport const listSources = cache(async (): Promise<Source[]> => {\n  await connection();\n  const rows = await getDb().select().from(sources).orderBy(sources.createdAt);\n  return rows.map((row) => sourceSchema.parse(row));\n});\n```\n\n**Push the count to SQL** instead of fetching+parsing every row just to `.filter().length` in JS — cheap now, but it's the pattern that becomes an actual N+1-adjacent cost once `sources` has real volume:\n```ts\nimport { sql } from \"drizzle-orm\";\n\nexport async function countSourcesBySide() {\n  await connection();\n  const [row] = await getDb()\n    .select({\n      crm: sql<number>`count(*) filter (where ${sources.kind} in ('salesforce','hubspot'))`,\n      warehouse: sql<number>`count(*) filter (where ${sources.kind} in ('databricks','snowflake'))`,\n      synthetic: sql<number>`count(*) filter (where ${sources.kind} = 'synthetic')`,\n    })\n    .from(sources);\n  return row;\n}\n```\n\n## 2. React re-renders — nothing to fix\n\nEvery `\"use client\"` component (`nav-rail.tsx`, `landing-hero.tsx`, `pipeline-strip.tsx`, `step-list.tsx`) is stateless and maps over module-scope constant arrays (`NAV`, `STAGES`). No inline object/array literals passed as props that would break memoization, no unnecessary client boundaries. `usePathname()` in `nav-rail.tsx` is the only reactive value, and it correctly only drives an active-link className.\n\n## 3. Caching — the one gap worth calling out\n\nComment in `sources.ts` says \"TanStack Query is reserved for run-status polling only\" — that infra isn't built yet. When you add it for the Runs page, the thing to get right up front:\n\n```tsx\nuseEffect(() => {\n  const id = setInterval(poll, 2000);\n  return () => clearInterval(id); // must fire on unmount AND on terminal status\n}, [runId, status]);\n```\n\nAn easy bug here is stopping the interval only on unmount and not on terminal `status` (`succeeded`/`failed`), which leaves it polling a finished run until the user navigates away.\n\n## 4. Memory leaks — none found\n\nZero `setInterval`/`setTimeout`/`addEventListener`/subscriptions anywhere. The one thing that *would* leak in dev (a new Postgres pool on every HMR reload) is already handled correctly in `lib/db/index.ts` via `globalThis` caching.\n\n## 5. Redundant computations — none found\n\n`SourceTable` does `source.config.objects.join(\", \")` and `pathname.startsWith()` per row/item — both trivial and correctly scoped, nothing to memoize.\n\n**Net:** the two `sources.ts` changes above are the only code-level actions worth taking right now. Everything else is \"keep doing what you're doing\" — re-audit once Runs/Conflicts pages with polling and larger tables actually land, since that's where these patterns will start to matter.\n",
+  "parsedOutput": {
+    "sections": [
+      {
+        "title": "1. Real issue: duplicate query risk in `lib/server/sources.ts`",
+        "content": "\n```ts\nexport async function countSourcesBySide() {\n  const all = await listSources();   // full SELECT + zod-parse of every row\n  return { crm: ..., warehouse: ..., synthetic: ... };\n}\n```\n\nNot an N+1 today (nothing currently calls both in the same request), but it's a landmine: the moment a future page needs both the full list *and* the counts (e.g. a dashboard header), you get two separate round trips fetching identical rows. Two fixes, do both:\n\n**Dedupe with React's `cache()`** so repeated calls in one request hit Postgres once:\n```ts\nimport { cache } from \"react\";\n\nexport const listSources = cache(async (): Promise<Source[]> => {\n  await connection();\n  const rows = await getDb().select().from(sources).orderBy(sources.createdAt);\n  return rows.map((row) => sourceSchema.parse(row));\n});\n```\n\n**Push the count to SQL** instead of fetching+parsing every row just to `.filter().length` in JS — cheap now, but it's the pattern that becomes an actual N+1-adjacent cost once `sources` has real volume:\n```ts\nimport { sql } from \"drizzle-orm\";\n\nexport async function countSourcesBySide() {\n  await connection();\n  const [row] = await getDb()\n    .select({\n      crm: sql<number>`count(*) filter (where ${sources.kind} in ('salesforce','hubspot'))`,\n      warehouse: sql<number>`count(*) filter (where ${sources.kind} in ('databricks','snowflake'))`,\n      synthetic: sql<number>`count(*) filter (where ${sources.kind} = 'synthetic')`,\n    })\n    .from(sources);\n  return row;\n}\n```\n\n",
+        "level": 2
+      },
+      {
+        "title": "2. React re-renders — nothing to fix",
+        "content": "\nEvery `\"use client\"` component (`nav-rail.tsx`, `landing-hero.tsx`, `pipeline-strip.tsx`, `step-list.tsx`) is stateless and maps over module-scope constant arrays (`NAV`, `STAGES`). No inline object/array literals passed as props that would break memoization, no unnecessary client boundaries. `usePathname()` in `nav-rail.tsx` is the only reactive value, and it correctly only drives an active-link className.\n\n",
+        "level": 2
+      },
+      {
+        "title": "3. Caching — the one gap worth calling out",
+        "content": "\nComment in `sources.ts` says \"TanStack Query is reserved for run-status polling only\" — that infra isn't built yet. When you add it for the Runs page, the thing to get right up front:\n\n```tsx\nuseEffect(() => {\n  const id = setInterval(poll, 2000);\n  return () => clearInterval(id); // must fire on unmount AND on terminal status\n}, [runId, status]);\n```\n\nAn easy bug here is stopping the interval only on unmount and not on terminal `status` (`succeeded`/`failed`), which leaves it polling a finished run until the user navigates away.\n\n",
+        "level": 2
+      },
+      {
+        "title": "4. Memory leaks — none found",
+        "content": "\nZero `setInterval`/`setTimeout`/`addEventListener`/subscriptions anywhere. The one thing that *would* leak in dev (a new Postgres pool on every HMR reload) is already handled correctly in `lib/db/index.ts` via `globalThis` caching.\n\n",
+        "level": 2
+      },
+      {
+        "title": "5. Redundant computations — none found",
+        "content": "`SourceTable` does `source.config.objects.join(\", \")` and `pathname.startsWith()` per row/item — both trivial and correctly scoped, nothing to memoize.\n\n**Net:** the two `sources.ts` changes above are the only code-level actions worth taking right now. Everything else is \"keep doing what you're doing\" — re-audit once Runs/Conflicts pages with polling and larger tables actually land, since that's where these patterns will start to matter.",
+        "level": 2
+      }
+    ],
+    "codeBlocks": [
+      {
+        "language": "ts",
+        "code": "export async function countSourcesBySide() {\n  const all = await listSources();   // full SELECT + zod-parse of every row\n  return { crm: ..., warehouse: ..., synthetic: ... };\n}"
+      },
+      {
+        "language": "ts",
+        "code": "import { cache } from \"react\";\n\nexport const listSources = cache(async (): Promise<Source[]> => {\n  await connection();\n  const rows = await getDb().select().from(sources).orderBy(sources.createdAt);\n  return rows.map((row) => sourceSchema.parse(row));\n});"
+      },
+      {
+        "language": "ts",
+        "code": "import { sql } from \"drizzle-orm\";\n\nexport async function countSourcesBySide() {\n  await connection();\n  const [row] = await getDb()\n    .select({\n      crm: sql<number>`count(*) filter (where ${sources.kind} in ('salesforce','hubspot'))`,\n      warehouse: sql<number>`count(*) filter (where ${sources.kind} in ('databricks','snowflake'))`,\n      synthetic: sql<number>`count(*) filter (where ${sources.kind} = 'synthetic')`,\n    })\n    .from(sources);\n  return row;\n}"
+      },
+      {
+        "language": "tsx",
+        "code": "useEffect(() => {\n  const id = setInterval(poll, 2000);\n  return () => clearInterval(id); // must fire on unmount AND on terminal status\n}, [runId, status]);"
+      }
+    ]
+  },
+  "durationMs": 63392,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "optimize",
+  "timestamp": "2026-08-05T15:22:51.511Z",
+  "executionId": "optimize_1785943308119_7ioxme"
+}

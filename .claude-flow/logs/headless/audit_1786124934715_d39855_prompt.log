@@ -1,0 +1,617 @@
+[2026-08-07T17:48:54.791Z] PROMPT
+============================================================
+Analyze this codebase for security vulnerabilities:
+- Check for hardcoded secrets (API keys, passwords)
+- Identify SQL injection risks
+- Find XSS vulnerabilities
+- Check for insecure dependencies
+- Identify authentication/authorization issues
+
+Provide a JSON report with:
+{
+  "vulnerabilities": [{ "severity": "high|medium|low", "file": "...", "line": N, "description": "..." }],
+  "riskScore": 0-100,
+  "recommendations": ["..."]
+}
+
+## Codebase Context
+
+--- .agents/skills/clerk-backend-api/scripts/extract-tags.js ---
+let input = "";
+process.stdin.on("data", d => input += d);
+process.stdin.on("end", () => {
+  const lines = input.replace(/\r/g, "").split("\n");
+  let inTags = false;
+  for (const line of lines) {
+    if (line === "tags:") { inTags = true; continue; }
+    if (inTags && line.length > 0 && line[0] !== " ") break;
+    if (inTags) {
+      const m = line.match(/^\s{2}- name:\s*(.+)/);
+      if (m) console.log(m[1]);
+    }
+  }
+});
+
+
+--- .agents/skills/clerk-astro-patterns/templates/astro-basic-auth/src/middleware.ts ---
+import { clerkMiddleware } from "@clerk/astro/server"
+
+export const onRequest = clerkMiddleware()
+
+
+--- .agents/skills/clerk-nextjs-patterns/templates/nextjs-basic-auth/proxy.ts ---
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware()
+
+export const config = {
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/(api|trpc)(.*)',
+  ],
+}
+
+
+--- .agents/skills/clerk-nuxt-patterns/templates/nuxt-basic-auth/nuxt.config.ts ---
+export default defineNuxtConfig({
+  modules: ['@clerk/nuxt'],
+})
+
+
+--- .agents/skills/clerk-react-patterns/templates/react-basic-auth/vite.config.ts ---
+import react from "@vitejs/plugin-react"
+import { defineConfig } from "vite"
+
+export default defineConfig({
+	plugins: [react()],
+})
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/app/routes.ts ---
+import { type RouteConfig, index } from "@react-router/dev/routes"
+
+export default [index("routes/home.tsx")] satisfies RouteConfig
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/react-router.config.ts ---
+import type { Config } from '@react-router/dev/config'
+
+export default {
+  ssr: true,
+} satisfies Config
+
+
+--- .agents/skills/clerk-react-router-patterns/templates/react-router-basic-auth/vite.config.ts ---
+import { reactRouter } from "@react-router/dev/vite"
+import { defineConfig } from "vite"
+
+export default defineConfig({
+	plugins: [reactRouter()],
+	// React Router v8 dev SSR externalizes @clerk/react-router, which then resolves
+	// react-router's production build while the app uses the development build —
+	// two Router contexts, and useNavigate() throws inside ClerkProvider.
+	// See https://github.com/remix-run/react-router/issues/15232
+	ssr: {
+		noExternal: ["@clerk/react-router"],
+	},
+})
+
+
+--- .agents/skills/clerk-tanstack-patterns/templates/tanstack-basic-auth/src/start.ts ---
+import { clerkMiddleware } from '@clerk/tanstack-react-start/server';
+import { createStart } from '@tanstack/react-start';
+
+export const startInstance = createStart(() => {
+  return {
+    requestMiddleware: [clerkMiddleware()],
+  };
+});
+
+
+--- .agents/skills/clerk-tanstack-patterns/templates/tanstack-basic-auth/vite.config.ts ---
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { defineConfig } from 'vite'
+import tsConfigPaths from 'vite-tsconfig-paths'
+import viteReact from '@vitejs/plugin-react'
+
+export default defineConfig({
+  server: {
+    port: 3000,
+  },
+  plugins: [
+    tsConfigPaths({
+      projects: ['./tsconfig.json'],
+    }),
+    tanstackStart(),
+    viteReact(),
+  ],
+})
+
+
+--- .agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts ---
+import { createApp } from 'vue'
+import './style.css'
+import App from './App.vue'
+import { clerkPlugin } from '@clerk/vue'
+
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+if (!PUBLISHABLE_KEY) {
+  throw new Error('Add your Clerk Publishable Key to the .env file')
+}
+
+const app = createApp(App)
+app.use(clerkPlugin, { publishableKey: PUBLISHABLE_KEY })
+app.mount('#app')
+
+
+--- .agents/skills/clerk-vue-patterns/templates/vue-basic-auth/vite.config.ts ---
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+
+export default defineConfig({
+  plugins: [vue()],
+})
+
+
+--- web/app/api/audit/export/route.ts ---
+import { badRequest, isUuid, notFound } from "@/app/api/_lib/respond";
+import { listAuditForExport } from "@/lib/server/audit";
+import { requireReviewer } from "@/lib/server/auth";
+import { getRunDetail } from "@/lib/server/runs";
+import { auditDetailLine, auditNote } from "@/lib/audit-detail";
+import { shortRunId } from "@/lib/format";
+import { auditActionSchema, type AuditEntry } from "@/types/resolution";
+
+/**
+ * GET /api/audit/export?runId=&action= — "Export log" in wireframe 1n.
+ *
+ * CSV only. The audit trail is a ledger with four fixed columns and one open
+ * detail column; that is a spreadsheet, and a reviewer asking for the log is
+ * about to put it next to something else in one.
+ *
+ * `detail` goes out twice: once flattened the way the console reads it, and once
+ * as raw JSON. The flattened column is what a person wants; the raw column is
+ * why the file is still evidence if the flattening ever loses something.
+ */
+export async function GET(request: Request) {
+  const params = new URL(request.url).searchParams;
+
+  const runId = params.get("runId") ?? undefined;
+  if (runId !== undefined && !isUuid(runId)) return notFound("No such run.");
+
+  const rawAction = params.get("action");
+  const action = rawAction ? auditActionSchema.safeParse(rawAction) : null;
+  if (rawAction && !action?.success) return badRequest("Unknown audit action.");
+
+  const run = runId ? await getRunDetail(runId) : null;
+  if (runId && !run) return notFound("No such run.");
+
+  // Reading the trail is itself a thing a person did, so the file records who
+  // pulled it — but it is a read, and reads do not append to an append-only log.
+  await requireReviewer();
+
+  const entries = await listAuditForExport({
+    runId,
+    action: action?.success ? action.data : undefined,
+  });
+
+  const scope = run ? `-run-${shortRunId(run.id).replace("·", "")}` : "";
+
+  return new Response(auditToCsv(entries), {
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="canon-audit${scope}.csv"`,
+      "cache-control": "no-store",
+    },
+  });
+}
+
+const COLUMNS = [
+  "createdAt",
+  "runId",
+  "action",
+  "actor",
+  "resolutionId",
+  "detail",
+  "note",
+  "detailJson",
+] as const;
+
+function auditToCsv(entries: AuditEntry[]): string {
+  const lines = [COLUMNS.join(",")];
+
+  for (const entry of entries) {
+    lines.push(
+      [
+        entry.createdAt.toISOString(),
+        entry.runId,
+        entry.action,
+        entry.actor,
+        entry.resolutionId ?? "",
+        auditDetailLine(entry) ?? "",
+        auditNote(entry) ?? "",
+        JSON.stringify(entry.detail),
+      ]
+        .map(csvCell)
+        .join(","),
+    );
+  }
+
+  return lines.join("\r\n") + "\r\n";
+}
+
+function csvCell(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+
+--- web/app/api/conflicts/route.ts ---
+import { badRequest } from "@/app/api/_lib/respond";
+import { loadQueue } from "@/lib/server/conflicts";
+import { queueQuerySchema } from "@/types/queue";
+
+/**
+ * GET /api/conflicts — the filtered conflict queue.
+ *
+ * The console does not use this: every queue screen is a Server Component and
+ * reads `loadQueue` directly, because a review queue that arrives after a
+ * spinner is a worse review queue. This exists because the queue is the one
+ * read worth having outside the browser — an ops script asking "what is still
+ * escalated on run X" should not have to scrape HTML — and because it is the
+ * documented surface in AGENTS.md § Web Route Handlers.
+ *
+ * Same schema, same loader as the screen, so a filter cannot mean two things.
+ */
+export async function GET(request: Request) {
+  const params = Object.fromEntries(new URL(request.url).searchParams);
+  const parsed = queueQuerySchema.safeParse(params);
+
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message ?? "Invalid query.");
+  }
+
+  const load = await loadQueue(parsed.data);
+  if (load.state === "no-runs") {
+    return Response.json({ run: null, conflicts: [], total: 0, counts: null });
+  }
+
+  return Response.json({
+    run: {
+      id: load.run.id,
+      status: load.run.status,
+      sourceA: load.run.sourceAName,
+      sourceB: load.run.sourceBName,
+      ruleset: `${load.run.rulesetName} v${load.run.rulesetVersion}`,
+    },
+    counts: load.page.counts,
+    total: load.page.total,
+    page: load.page.page,
+    pageCount: load.page.pageCount,
+    conflicts: load.page.rows,
+  });
+}
+
+
+--- web/app/api/conflicts/[conflictId]/resolution/route.ts ---
+import { isUuid, notFound, parseJson } from "@/app/api/_lib/respond";
+import { requireReviewer } from "@/lib/server/auth";
+import { recordReview } from "@/lib/server/conflicts";
+import { reviewActionSchema } from "@/types/resolution";
+
+/**
+ * PATCH /api/conflicts/:conflictId/resolution — approve | reject | override.
+ *
+ * Wireframes 1i, 1j, 1k and 1l. Every one of the three appends to `audit_log`;
+ * nothing here is a silent change, and the agent's proposal is never deleted or
+ * rewritten — a reviewer's decision sits next to it.
+ *
+ * Two things are resolved server-side and cannot be sent in:
+ *
+ *   the reviewer   from the session, because "who approved this" is the question
+ *                  the audit trail exists to answer
+ *   the value      an override must be one of the two observed values or a legal
+ *                  normalization of one, the same check the engine's `validate`
+ *                  node applies to the model
+ */
+export async function PATCH(
+  request: Request,
+  ctx: RouteContext<"/api/conflicts/[conflictId]/resolution">,
+) {
+  const { conflictId } = await ctx.params;
+  if (!isUuid(conflictId)) return notFound("No such conflict.");
+
+  const parsed = await parseJson(request, reviewActionSchema);
+  if (!parsed.ok) return parsed.response;
+
+  const reviewer = await requireReviewer();
+  const result = await recordReview({
+    conflictId,
+    action: parsed.data,
+    reviewer,
+  });
+
+  if (!result.ok) {
+    return Response.json({ error: result.message }, { status: result.code });
+  }
+
+  return Response.json({
+    conflictId,
+    status: result.status,
+    reviewedBy: reviewer.label,
+  });
+}
+
+
+--- web/app/api/rulesets/route.ts ---
+import { parseJson } from "@/app/api/_lib/respond";
+import { createRulesetVersion, listRulesets } from "@/lib/server/rulesets";
+import { createRulesetSchema } from "@/types/rules";
+
+/**
+ * Wireframe 1d — the survivorship policy.
+ *
+ * POST creates a NEW VERSION. There is no PATCH and there will not be one: a
+ * run records the `rulesetId` it executed under, so mutable rules would make
+ * every past run unreproducible and turn the audit trail into a lie. "Save as
+ * v4" is the only way to change policy, and v3 stays readable forever.
+ */
+
+export async function GET() {
+  return Response.json({ rulesets: await listRulesets() });
+}
+
+export async function POST(request: Request) {
+  const parsed = await parseJson(request, createRulesetSchema);
+  if (!parsed.ok) return parsed.response;
+
+  const ruleset = await createRulesetVersion(parsed.data);
+  return Response.json({ ruleset }, { status: 201 });
+}
+
+
+--- web/app/api/runs/route.ts ---
+import { badRequest, parseJson } from "@/app/api/_lib/respond";
+import { requireReviewer } from "@/lib/server/auth";
+import { appendAudit } from "@/lib/server/audit";
+import { EngineUnreachableError, startRun } from "@/lib/server/engine";
+import { createRun, failUndispatchedRun, listRuns } from "@/lib/server/runs";
+import { getRuleset } from "@/lib/server/rulesets";
+import { findSourceIds } from "@/lib/server/sources";
+import { createRunSchema } from "@/types/run";
+
+/**
+ * Wireframe 1e — POST /api/runs.
+ *
+ * Returns { runId } immediately and never blocks on the pipeline. The run row
+ * is inserted `queued`, the engine is handed the id, and the console polls
+ * /api/runs/:runId/status from there.
+ */
+
+export async function GET() {
+  return Response.json({ runs: await listRuns() });
+}
+
+export async function POST(request: Request) {
+  const parsed = await parseJson(request, createRunSchema);
+  if (!parsed.ok) return parsed.response;
+
+  const { sourceAId, sourceBId, rulesetId } = parsed.data;
+
+  // Reconciling a source against itself would produce a perfect, meaningless
+  // run: every entity matches itself and nothing ever disagrees.
+  if (sourceAId === sourceBId) {
+    return badRequest("Source A and Source B must be different systems.");
+  }
+
+  // The FKs would catch a missing id, but as a 500 with a constraint name in
+  // it. The operator picked these from a dropdown; if one has since been
+  // deleted, say so.
+  const [found, ruleset] = await Promise.all([
+    findSourceIds([sourceAId, sourceBId]),
+    getRuleset(rulesetId),
+  ]);
+  if (!found.has(sourceAId)) return badRequest("Source A no longer exists.");
+  if (!found.has(sourceBId)) return badRequest("Source B no longer exists.");
+  if (!ruleset) return badRequest("That ruleset version no longer exists.");
+
+  // Who started this. `actor` is resolved from the session, never from the
+  // request body — an audit trail whose actor is whatever the client sent is
+  // not an audit trail.
+  const reviewer = await requireReviewer();
+
+  const run = await createRun(parsed.data);
+
+  await appendAudit({
+    runId: run.id,
+    action: "run_started",
+    actor: reviewer.label,
+    detail: {
+      sourceAId,
+      sourceBId,
+      rulesetId,
+      rulesetName: ruleset.name,
+      rulesetVersion: ruleset.version,
+    },
+  });
+
+  try {
+    await startRun(run.id);
+  } catch (cause) {
+    if (!(cause instanceof EngineUnreachableError)) throw cause;
+
+    // The run exists and the engine never took it. Record that ON THE ROW —
+    // wireframe 1h is a state, not a toast, and it has to survive a reload.
+    // The response is still 201: the run is real, it is just already failed,
+    // and the console navigates to it and shows why.
+    //
+    // `stage=` follows the engine's own error convention so the failed-run
+    // screen can highlight where it died without a second field on the row.
+    await failUndispatchedRun(run.id, `EngineDispatch: ${cause.message}\nstage=dispatch`);
+    await appendAudit({
+      runId: run.id,
+      action: "run_failed",
+      actor: "web",
+      detail: { stage: "dispatch", error: cause.message },
+    });
+  }
+
+  return Response.json({ runId: run.id }, { status: 201 });
+}
+
+
+--- web/app/api/runs/[runId]/export/route.ts ---
+import { badRequest, isUuid, notFound } from "@/app/api/_lib/respond";
+import { requireReviewer } from "@/lib/server/auth";
+import {
+  DEFAULT_EXPORT_SECTIONS,
+  EXPORT_SECTIONS,
+  buildRunExport,
+  decisionsToCsv,
+  isExportSection,
+  type ExportSection,
+} from "@/lib/server/export";
+import { getRunDetail } from "@/lib/server/runs";
+import { shortRunId } from "@/lib/format";
+
+/**
+ * GET /api/runs/:runId/export?format=json|csv&sections=… — wireframes 1g, 1o.
+ *
+ * JSON carries whichever sections were asked for; with none named it carries the
+ * two that are the export — the resolved hierarchy and the full decision log.
+ * CSV carries the decision log only, because two row shapes in one CSV is a file
+ * nobody can pivot.
+ */
+export async function GET(request: Request, ctx: RouteContext<"/api/runs/[runId]/export">) {
+  const { runId } = await ctx.params;
+  if (!isUuid(runId)) return notFound("No such run.");
+
+  const params = new URL(request.url).searchParams;
+
+  const format = params.get("format") ?? "json";
+  if (format !== "json" && format !== "csv") {
+    return badRequest("format must be json or csv.");
+  }
+
+  const sections = parseSections(params.get("sections"));
+  if (sections === null) {
+    return badRequest("sections must be a comma-separated list of hierarchy, decisions, orphans, stats.");
+  }
+
+  const run = await getRunDetail(runId);
+  if (!run) return notFound("No such run.");
+
+  // Recorded in the file itself. An export that circulates without saying who
+  // pulled it and when is the kind of artefact this whole system exists to
+  // replace.
+  const reviewer = await requireReviewer();
+  const payload = await buildRunExport(run, reviewer.label, sections);
+  const filename = `canon-run-${shortRunId(run.id).replace("·", "")}`;
+
+  if (format === "csv") {
+    return new Response(decisionsToCsv(payload.decisions ?? []), {
+      headers: {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="${filename}-decisions.csv"`,
+        "cache-control": "no-store",
+      },
+    });
+  }
+
+  return new Response(JSON.stringify(payload, null, 2), {
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "content-disposition": `attachment; filename="${filename}.json"`,
+      "cache-control": "no-store",
+    },
+  });
+}
+
+/**
+ * `?sections=hierarchy,decisions`. Absent means the default two. An unknown name
+ * is rejected rather than dropped: silently returning a file without the section
+ * someone asked for is worse than saying no.
+ *
+ * Returns null when the list is invalid, so the caller can answer 400.
+ */
+function parseSections(raw: string | null): readonly ExportSection[] | null {
+  if (raw === null) return DEFAULT_EXPORT_SECTIONS;
+
+  const names = raw
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+
+  if (names.length === 0) return null;
+  if (!names.every(isExportSection)) return null;
+
+  // De-duplicated, and in the canonical order rather than the order asked for, so
+  // two links with the same sections produce byte-identical files.
+  return EXPORT_SECTIONS.filter((section) => names.includes(section));
+}
+
+
+--- web/app/api/runs/[runId]/route.ts ---
+import { isUuid, notFound } from "@/app/api/_lib/respond";
+import { getRunDetail } from "@/lib/server/runs";
+
+/** GET /api/runs/:runId — the run row, with the two sources and the policy version resolved. */
+export async function GET(_request: Request, ctx: RouteContext<"/api/runs/[runId]">) {
+  const { runId } = await ctx.params;
+  if (!isUuid(runId)) return notFound("No such run.");
+
+  const run = await getRunDetail(runId);
+  return run ? Response.json({ run }) : notFound("No such run.");
+}
+
+
+--- web/app/api/runs/[runId]/status/route.ts ---
+import { isUuid, notFound } from "@/app/api/_lib/respond";
+import { fetchEngineStatus } from "@/lib/server/engine";
+import { getRun } from "@/lib/server/runs";
+import { isTerminalRunStatus, type EngineRunStatus } from "@/types/run";
+
+/**
+ * GET /api/runs/:runId/status — the only polled surface in the console.
+ *
+ * Proxied rather than called from the browser: ENGINE_URL is server-side and
+ * the engine has no session of its own.
+ *
+ * The engine is the freshest source of status, but it is NOT the system of
+ * record — it advances `runs.status` in Postgres as each stage completes. So
+ * this route prefers the engine and falls back to the row, which means a
+ * restarted or briefly unreachable engine degrades a live run to a slightly
+ * stale number instead of an error banner. A terminal run skips the engine
+ * entirely; there is nothing left for it to say.
+ */
+export async function GET(_request: Request, ctx: RouteContext<"/api/runs/[runId]/status">) {
+  const { runId } = await ctx.params;
+  if (!isUuid(runId)) return notFound("No such run.");
+
+  const run = await getRun(runId);
+  if (!run) return notFound("No such run.");
+
+  const fromRow: EngineRunStatus = {
+    runId: run.id,
+    status: run.status,
+    stats: run.stats,
+    error: run.error,
+  };
+
+  if (isTerminalRunStatus(run.status)) return json(fromRow);
+
+  const live = await fetchEngineStatus(runId);
+  return json(live ?? fromRow);
+}
+
+function json(status: EngineRunStatus): Response {
+  return Response.json(status, {
+    // Polled. A cached status is a status that never changes.
+    headers: { "cache-control": "no-store" },
+  });
+}
+
+
+## Instructions
+
+Analyze the above codebase context and provide your response following the format specified in the task.

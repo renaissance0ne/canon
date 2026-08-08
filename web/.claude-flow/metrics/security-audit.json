@@ -1,70 +1,53 @@
 {
-  "timestamp": "2026-08-05T09:07:12.265Z",
+  "timestamp": "2026-08-08T07:50:23.510Z",
   "mode": "headless",
   "workerType": "audit",
   "model": "haiku",
-  "durationMs": 48458,
-  "executionId": "audit_1785920783807_moxg3z",
+  "durationMs": 37182,
+  "executionId": "audit_1786175386328_lv8d5p",
   "success": true,
   "findings": {
     "vulnerabilities": [
       {
-        "severity": "critical",
-        "file": ".env",
-        "line": -1,
-        "description": "Real Supabase database credentials exposed in .env file. Credentials include live PostgreSQL connection strings with plaintext passwords and Clerk secret key. This file must never be committed to version control."
-      },
-      {
-        "severity": "critical",
-        "file": ".env",
-        "line": -1,
-        "description": "Clerk secret key (sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf) is hardcoded in .env. Secret keys must be stored in secret management systems and never in code or .env files."
-      },
-      {
-        "severity": "high",
-        "file": "proxy.ts",
+        "severity": "medium",
+        "file": "app/api/conflicts/route.ts",
         "line": 1,
-        "description": "Route protection relies entirely on proxy.ts matcher configuration without database-level access control. If the matcher regex is misconfigured or bypassed, unprotected routes may be accessible. Table ownership is enforced by policy alone, not database constraints."
-      },
-      {
-        "severity": "high",
-        "file": "lib/db/schema.ts",
-        "line": -1,
-        "description": "Table ownership (sources, rulesets web-only; entities, matches, conflicts engine-only) is enforced by code discipline and policy rather than database-level permissions. A compromised application could write to engine-owned tables."
+        "description": "GET endpoint lacks explicit authentication via requireReviewer(). Comment states 'enforced by proxy.ts' but this creates an implicit dependency. If proxy authentication fails, this endpoint could expose queue data without verification."
       },
       {
         "severity": "medium",
-        "file": "types/source.ts",
-        "line": 15,
-        "description": "The 'filter' field in sourceConfig is optional and accepted as a string. If this filter is passed to the engine without proper validation/sanitization, it could be vulnerable to SQL injection depending on how the engine processes it."
+        "file": "app/api/sources/route.ts",
+        "line": 1,
+        "description": "POST endpoint creates sources without explicit requireReviewer() call. While comment claims proxy enforcement, GET endpoint is also unauthenticated, potentially allowing unauthorized source configuration queries."
       },
       {
         "severity": "medium",
-        "file": "types/resolution.ts",
-        "line": 17,
-        "description": "The 'rationale' field is agent-authored plain-English text. Without explicit HTML escaping verification, rendering this field could be vulnerable to XSS if React's auto-escaping is bypassed or if rendered outside React components."
+        "file": "app/api/rulesets/route.ts",
+        "line": 1,
+        "description": "Both GET and POST endpoints lack explicit authentication. POST (creating rulesets) should require requireReviewer(). GET being public may be intentional but should be explicitly verified."
       },
       {
         "severity": "low",
-        "file": ".env",
-        "line": -1,
-        "description": "DATABASE_URL and MIGRATION_DATABASE_URL use the same credentials, creating a single point of compromise. While necessary for the pooler setup, consider rotating these credentials regularly."
+        "file": "lib/db/index.ts",
+        "line": 29,
+        "description": "Connection string validation happens at runtime. Missing DATABASE_URL throws error at query time rather than boot time, potentially allowing failed deployments."
+      },
+      {
+        "severity": "low",
+        "file": "drizzle.config.ts",
+        "line": 12,
+        "description": "Using `prepare: false` disables prepared statement caching for Supabase compatibility. While postgres.js still parameterizes queries, this reduces statement reuse performance optimization."
       }
     ],
-    "riskScore": 78,
+    "riskScore": 28,
     "recommendations": [
-      "IMMEDIATE: Rotate all compromised credentials (Supabase PostgreSQL passwords and Clerk secret key). The exposed credentials in .env must be treated as breached.",
-      "Add .env and .env.local to .gitignore to prevent accidental credential commits. Verify these files are not in git history.",
-      "Implement database-level access control: create separate Postgres roles for the application and engine with explicit permissions on assigned tables only.",
-      "Replace proxy.ts middleware with a more robust authorization system: consider a centralized middleware that validates both route and operation permissions.",
-      "Sanitize and validate the 'filter' field in source configs before passing to the engine. Document the expected format and restrictions.",
-      "Audit all locations where 'rationale' field is rendered to confirm React's auto-escaping is applied and no dangerouslySetInnerHTML is used.",
-      "Implement structured logging for authentication/authorization failures to detect attack attempts.",
-      "Add CSRF protection to state-changing endpoints (PATCH /api/conflicts/:conflictId/resolution).",
-      "Set up secrets scanning in CI/CD to prevent future credential commits.",
-      "Regularly rotate Supabase and Clerk credentials (quarterly minimum)."
+      "Add explicit `requireReviewer()` calls to ALL authenticated routes (conflicts GET, rulesets POST/GET, sources GET/POST). Document which endpoints are intentionally public and why.",
+      "Move DATABASE_URL validation to module initialization time, not query time, to fail deployments early.",
+      "Review proxy.ts authentication middleware and document the trust boundary—implicit enforcement across multiple routes is fragile.",
+      "Audit package.json dependencies for known vulnerabilities using `npm audit` or similar tools (not provided in context).",
+      "Verify CSV export escaping in `csvCell()` handles all edge cases—current implementation appears safe but test with malicious inputs like quotes and newlines."
     ]
   },
-  "rawOutputPreview": "Based on my analysis of the provided codebase context, here's the security vulnerability report:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": -1,\n      \"description\": \"Real Supabase database credentials exposed in .env file. Credentials include live PostgreSQL connection strings with plaintext passwords and Clerk secret key. This file must never be committed to version control.\"\n    },\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": -1,\n      \"description\": \"Clerk secret key (sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf) is hardcoded in .env. Secret keys must be stored in secret management systems and never in code or .env files.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"proxy.ts\",\n      \"line\": 1,\n      \"description\": \"Route protection relies entirely on proxy.ts matcher configuration without database-level access control. If the matcher regex is misconfigured or bypassed, unprotected routes may be accessible. Table ownership is enforced by policy alone, not database constraints.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"lib/db/schema.ts\",\n      \"line\": -1,\n      \"description\": \"Table ownership (sources, rulesets web-only; entities, matches, conflicts engine-only) is enforced by code discipline and policy rather than database-level permissions. A compromised application could write to engine-owned tables.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"types/source.ts\",\n      \"line\": 15,\n      \"description\": \"The 'filter' field in sourceConfig is optional and accepted as a string. If this filter is passed to the engine without proper validation/sanitization, it could be vulnerable to SQL injection depending on how the engine processes it.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"types/resolution.ts\",\n      \"line\": 17,\n      \"description\": \"The 'rationale' field is agent-authored plain-English text. Without explicit HTML escap",
-  "rawOutputLength": 4267
+  "rawOutputPreview": "Looking at the provided codebase context, I'll conduct a comprehensive security analysis focusing on the key areas you specified.\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"medium\",\n      \"file\": \"app/api/conflicts/route.ts\",\n      \"line\": 1,\n      \"description\": \"GET endpoint lacks explicit authentication via requireReviewer(). Comment states 'enforced by proxy.ts' but this creates an implicit dependency. If proxy authentication fails, this endpoint could expose queue data without verification.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"app/api/sources/route.ts\",\n      \"line\": 1,\n      \"description\": \"POST endpoint creates sources without explicit requireReviewer() call. While comment claims proxy enforcement, GET endpoint is also unauthenticated, potentially allowing unauthorized source configuration queries.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"app/api/rulesets/route.ts\",\n      \"line\": 1,\n      \"description\": \"Both GET and POST endpoints lack explicit authentication. POST (creating rulesets) should require requireReviewer(). GET being public may be intentional but should be explicitly verified.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"lib/db/index.ts\",\n      \"line\": 29,\n      \"description\": \"Connection string validation happens at runtime. Missing DATABASE_URL throws error at query time rather than boot time, potentially allowing failed deployments.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"drizzle.config.ts\",\n      \"line\": 12,\n      \"description\": \"Using `prepare: false` disables prepared statement caching for Supabase compatibility. While postgres.js still parameterizes queries, this reduces statement reuse performance optimization.\"\n    }\n  ],\n  \"riskScore\": 28,\n  \"recommendations\": [\n    \"Add explicit `requireReviewer()` calls to ALL authenticated routes (conflicts GET, rulesets POST/GET, sources GET/POST). Document which endpoints are intentionally public and why.\",\n    \"Move DATABASE",
+  "rawOutputLength": 3265
 }

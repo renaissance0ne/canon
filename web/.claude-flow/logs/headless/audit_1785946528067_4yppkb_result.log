@@ -1,0 +1,82 @@
+[2026-08-05T16:16:20.316Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": 11,\n      \"description\": \"Hardcoded database credentials in .env file. Password 'ArlecchinoxZhongli' is exposed in clear text in DATABASE_URL connection string. This credential must be rotated immediately and the Supabase user password changed.\"\n    },\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": 17,\n      \"description\": \"Hardcoded database credentials in MIGRATION_DATABASE_URL. Same Supabase credentials repeated with identical password. Requires immediate rotation.\"\n    },\n    {\n      \"severity\": \"critical\",\n      \"file\": \".env\",\n      \"line\": 30,\n      \"description\": \"Hardcoded Clerk secret key exposed: 'sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf'. While marked as test key, secret keys should never be committed. This should be revoked and regenerated.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \".env\",\n      \"line\": 29,\n      \"description\": \"Clerk publishable key in .env (though NEXT_PUBLIC_ prefixed is correct). However, storing any secrets in .env file that gets committed is a risk. Use secrets management instead.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"lib/server/auth.ts\",\n      \"line\": 28,\n      \"description\": \"Error message in requireReviewer() is verbose and reveals authentication architecture. A simpler message like 'Unauthorized' would be better to avoid information disclosure.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"drizzle.config.ts\",\n      \"line\": 12,\n      \"description\": \"Missing null check on migrationUrl before using it in defineConfig. If both env vars are missing, the error is thrown but the config object still executes, which could fail silently in some contexts.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"next.config.ts\",\n      \"line\": 3,\n      \"description\": \"No security headers configured (CSP, HSTS, X-Frame-Options, etc.). Next.js middleware should define security headers via next/headers or middleware.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"proxy.ts\",\n      \"line\": 18,\n      \"description\": \"No rate limiting on authentication routes (/sign-in, /sign-up). Brute force attacks on Clerk endpoints are possible (though Clerk may have its own protection). Consider adding rate limiting middleware.\"\n    }\n  ],\n  \"riskScore\": 92,\n  \"recommendations\": [\n    \"IMMEDIATE: Revoke and rotate the Supabase database credentials. Change the postgres.yenteczevefirhvgyvcu user password immediately. All connection strings must be changed.\",\n    \"IMMEDIATE: Revoke the Clerk secret key 'sk_test_...' and regenerate a new one from the Clerk dashboard.\",\n    \"Never commit .env files. Ensure .env is in .gitignore and all environment files are excluded from version control.\",\n    \"Move all secrets to environment variables managed by your deployment platform (Vercel, AWS, etc.). Use secrets management tools for non-deployed environments.\",\n    \"Implement a secrets scanner pre-commit hook (e.g., git-secrets, husky with secretlint) to prevent future credential leaks.\",\n    \"Add comprehensive security headers via Next.js middleware: Content-Security-Policy, Strict-Transport-Security, X-Frame-Options, X-Content-Type-Options, Referrer-Policy.\",\n    \"Implement rate limiting on authentication routes using middleware to prevent brute force attacks on /sign-in and /sign-up.\",\n    \"Add CSRF protection if using traditional forms (Next.js Server Actions provide some protection, but explicit tokens are better for API routes).\",\n    \"Simplify error messages in requireReviewer() to avoid leaking authentication architecture details.\",\n    \"Audit git history to ensure no credentials were previously committed. Use BFG Repo-Cleaner or git-filter-repo if needed.\",\n    \"Implement request logging and monitoring for suspicious authentication attempts.\",\n    \"Add database connection validation checks beyond environment variable presence - test connectivity on startup.\",\n    \"Consider implementing API key rotation policies and audit logging for all sensitive operations.\",\n    \"Enable Supabase audit logs and configure alerts for unusual database access patterns.\",\n    \"Review Clerk webhook secret configuration and ensure it's not exposed in client code.\"\n  ]\n}\n```\n\n## Summary\n\nThe codebase has **good security fundamentals** but a **critical credential exposure issue**:\n\n**Critical Issues:**\n- **Real database credentials and API keys committed to `.env`** — these must be rotated immediately\n- Supabase password, database URLs, and Clerk secret are all exposed\n\n**Strong Security Practices:**\n- Uses Clerk's managed authentication service\n- Drizzle ORM prevents SQL injection through parameterized queries\n- Protected-first middleware (all routes require auth by default)\n- Zod validation on all user input\n- `server-only` module prevents database code leaking to client\n- Proper environment variable categorization\n\n**Immediate Actions Required:**\n1. Rotate Supabase credentials (user password)\n2. Regenerate Clerk secret key\n3. Remove `.env` from git history\n4. Add `.env` to `.gitignore`\n5. Add pre-commit hook to block secrets\n\nThe authentication architecture itself is sound, but the credential management is a critical flaw that must be fixed before any deployment.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": 11,
+        "description": "Hardcoded database credentials in .env file. Password 'ArlecchinoxZhongli' is exposed in clear text in DATABASE_URL connection string. This credential must be rotated immediately and the Supabase user password changed."
+      },
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": 17,
+        "description": "Hardcoded database credentials in MIGRATION_DATABASE_URL. Same Supabase credentials repeated with identical password. Requires immediate rotation."
+      },
+      {
+        "severity": "critical",
+        "file": ".env",
+        "line": 30,
+        "description": "Hardcoded Clerk secret key exposed: 'sk_test_Vd6NR8FMHunnG17BPRjoRiC1ahAgvzBWc08Xxr1Nwf'. While marked as test key, secret keys should never be committed. This should be revoked and regenerated."
+      },
+      {
+        "severity": "high",
+        "file": ".env",
+        "line": 29,
+        "description": "Clerk publishable key in .env (though NEXT_PUBLIC_ prefixed is correct). However, storing any secrets in .env file that gets committed is a risk. Use secrets management instead."
+      },
+      {
+        "severity": "medium",
+        "file": "lib/server/auth.ts",
+        "line": 28,
+        "description": "Error message in requireReviewer() is verbose and reveals authentication architecture. A simpler message like 'Unauthorized' would be better to avoid information disclosure."
+      },
+      {
+        "severity": "medium",
+        "file": "drizzle.config.ts",
+        "line": 12,
+        "description": "Missing null check on migrationUrl before using it in defineConfig. If both env vars are missing, the error is thrown but the config object still executes, which could fail silently in some contexts."
+      },
+      {
+        "severity": "low",
+        "file": "next.config.ts",
+        "line": 3,
+        "description": "No security headers configured (CSP, HSTS, X-Frame-Options, etc.). Next.js middleware should define security headers via next/headers or middleware."
+      },
+      {
+        "severity": "low",
+        "file": "proxy.ts",
+        "line": 18,
+        "description": "No rate limiting on authentication routes (/sign-in, /sign-up). Brute force attacks on Clerk endpoints are possible (though Clerk may have its own protection). Consider adding rate limiting middleware."
+      }
+    ],
+    "riskScore": 92,
+    "recommendations": [
+      "IMMEDIATE: Revoke and rotate the Supabase database credentials. Change the postgres.yenteczevefirhvgyvcu user password immediately. All connection strings must be changed.",
+      "IMMEDIATE: Revoke the Clerk secret key 'sk_test_...' and regenerate a new one from the Clerk dashboard.",
+      "Never commit .env files. Ensure .env is in .gitignore and all environment files are excluded from version control.",
+      "Move all secrets to environment variables managed by your deployment platform (Vercel, AWS, etc.). Use secrets management tools for non-deployed environments.",
+      "Implement a secrets scanner pre-commit hook (e.g., git-secrets, husky with secretlint) to prevent future credential leaks.",
+      "Add comprehensive security headers via Next.js middleware: Content-Security-Policy, Strict-Transport-Security, X-Frame-Options, X-Content-Type-Options, Referrer-Policy.",
+      "Implement rate limiting on authentication routes using middleware to prevent brute force attacks on /sign-in and /sign-up.",
+      "Add CSRF protection if using traditional forms (Next.js Server Actions provide some protection, but explicit tokens are better for API routes).",
+      "Simplify error messages in requireReviewer() to avoid leaking authentication architecture details.",
+      "Audit git history to ensure no credentials were previously committed. Use BFG Repo-Cleaner or git-filter-repo if needed.",
+      "Implement request logging and monitoring for suspicious authentication attempts.",
+      "Add database connection validation checks beyond environment variable presence - test connectivity on startup.",
+      "Consider implementing API key rotation policies and audit logging for all sensitive operations.",
+      "Enable Supabase audit logs and configure alerts for unusual database access patterns.",
+      "Review Clerk webhook secret configuration and ensure it's not exposed in client code."
+    ]
+  },
+  "durationMs": 52249,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T16:16:20.316Z",
+  "executionId": "audit_1785946528067_4yppkb"
+}

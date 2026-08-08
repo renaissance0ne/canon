@@ -1,0 +1,42 @@
+[2026-08-05T13:57:01.863Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Looking at this codebase, I'll perform a comprehensive security analysis of the provided files.\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/drizzle.config.ts\",\n      \"line\": 13,\n      \"description\": \"Database connection URL read from environment variables. While this is build-time, server-side-only code, ensure MIGRATION_DATABASE_URL is never logged or exposed in build outputs.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \".agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts\",\n      \"line\": 5,\n      \"description\": \"Clerk publishable key loaded from environment via import.meta.env. While publishable keys are intended for public access, ensure VITE_CLERK_PUBLISHABLE_KEY is properly restricted and not leaked through source maps or bundler output.\"\n    }\n  ],\n  \"riskScore\": 12,\n  \"recommendations\": [\n    \"✓ EXCELLENT: Codebase properly uses 'server-only' module marker on all database and auth code to prevent credentials from reaching client bundles\",\n    \"✓ EXCELLENT: Database schema explicitly documents 'NEVER credentials' in config — secrets are correctly isolated to engine .env, keyed by source kind\",\n    \"✓ EXCELLENT: Uses Drizzle ORM with parameterized queries — no raw SQL or injection risks detected\",\n    \"✓ EXCELLENT: Authentication properly enforced via Clerk + server-side requireReviewer() that throws on missing sessions\",\n    \"✓ EXCELLENT: Zod schema validation on all data access boundaries (sources.ts, auth.ts)\",\n    \"✓ EXCELLENT: Clear table ownership model prevents unintended writes (e.g., engine cannot write to sources/rulesets)\",\n    \"VERIFY: Ensure build pipelines never log DATABASE_URL or MIGRATION_DATABASE_URL to CI/CD output\",\n    \"VERIFY: Confirm environment variable validation at deployment time — both drizzle.config.ts and db/index.ts throw if URLs missing, which is correct\",\n    \"VERIFY: Source .env files are .gitignored and secrets are managed via CI/CD secret stores, not committed\",\n    \"MONITOR: Review any API route handlers in web/app/api/ (not shown here) to confirm they validate request bodies with Zod before querying the database\",\n    \"MONITOR: Ensure the engine never receives or logs sensitive credentials from web layer — all engine auth should come from its own .env only\"\n  ]\n}\n```\n\n**Summary:**\n\nThis codebase **demonstrates strong security discipline**. The architecture properly separates secrets (engine-only .env), uses type-safe ORM patterns, applies server-only markers consistently, and validates all data boundaries. The design explicitly prevents credential leakage to the web layer or client bundles — a critical safeguard for this reconciliation system.\n\nThe low risk score reflects the absence of hardcoded secrets, SQL injection vectors, XSS risks, or unprotected auth boundaries in the provided code. No insecure dependencies are evident (using established libraries: Clerk, Drizzle, Next.js).\n\nThe remaining recommendations are deployment-time hygiene (build logs, CI/CD secrets management) rather than code defects.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "low",
+        "file": "web/drizzle.config.ts",
+        "line": 13,
+        "description": "Database connection URL read from environment variables. While this is build-time, server-side-only code, ensure MIGRATION_DATABASE_URL is never logged or exposed in build outputs."
+      },
+      {
+        "severity": "low",
+        "file": ".agents/skills/clerk-vue-patterns/templates/vue-basic-auth/src/main.ts",
+        "line": 5,
+        "description": "Clerk publishable key loaded from environment via import.meta.env. While publishable keys are intended for public access, ensure VITE_CLERK_PUBLISHABLE_KEY is properly restricted and not leaked through source maps or bundler output."
+      }
+    ],
+    "riskScore": 12,
+    "recommendations": [
+      "✓ EXCELLENT: Codebase properly uses 'server-only' module marker on all database and auth code to prevent credentials from reaching client bundles",
+      "✓ EXCELLENT: Database schema explicitly documents 'NEVER credentials' in config — secrets are correctly isolated to engine .env, keyed by source kind",
+      "✓ EXCELLENT: Uses Drizzle ORM with parameterized queries — no raw SQL or injection risks detected",
+      "✓ EXCELLENT: Authentication properly enforced via Clerk + server-side requireReviewer() that throws on missing sessions",
+      "✓ EXCELLENT: Zod schema validation on all data access boundaries (sources.ts, auth.ts)",
+      "✓ EXCELLENT: Clear table ownership model prevents unintended writes (e.g., engine cannot write to sources/rulesets)",
+      "VERIFY: Ensure build pipelines never log DATABASE_URL or MIGRATION_DATABASE_URL to CI/CD output",
+      "VERIFY: Confirm environment variable validation at deployment time — both drizzle.config.ts and db/index.ts throw if URLs missing, which is correct",
+      "VERIFY: Source .env files are .gitignored and secrets are managed via CI/CD secret stores, not committed",
+      "MONITOR: Review any API route handlers in web/app/api/ (not shown here) to confirm they validate request bodies with Zod before querying the database",
+      "MONITOR: Ensure the engine never receives or logs sensitive credentials from web layer — all engine auth should come from its own .env only"
+    ]
+  },
+  "durationMs": 32458,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-05T13:57:01.863Z",
+  "executionId": "audit_1785938189405_531yew"
+}

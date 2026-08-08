@@ -1,0 +1,38 @@
+[2026-08-08T02:37:00.029Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"medium\",\n      \"file\": \"web/app/api/audit/export/route.ts\",\n      \"line\": 65,\n      \"description\": \"CSV formula injection vulnerability. The csvCell() function escapes quotes and newlines but does not escape formula-injection characters (=, +, -, @). If audit detail fields contain user-controlled data or values starting with these characters, they could be executed as formulas when opened in Excel/Sheets.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/app/api/conflicts/route.ts\",\n      \"line\": 15,\n      \"description\": \"Missing error logging context. While badRequest() is called for invalid queries, the detailed Zod error is not logged server-side, which could obscure attack patterns or injection attempts.\"\n    }\n  ],\n  \"riskScore\": 28,\n  \"recommendations\": [\n    \"Fix CSV injection by escaping formula characters in csvCell(): prepend a single quote (') to values starting with =, +, -, or @, or use a CSV library that handles this automatically.\",\n    \"Add server-side logging for Zod validation failures in conflicts/route.ts to detect malformed query injection attempts.\",\n    \"Verify that auditDetailLine() and auditNote() in audit/export/route.ts do not introduce unescaped user input into CSV output.\",\n    \"Audit the loadQueue() server function (not shown) to ensure SQL queries are parameterized and not vulnerable to injection.\",\n    \"All authentication checks (requireReviewer()) are correct; maintain this pattern across all sensitive routes.\",\n    \"The codebase correctly keeps secrets out of client code (no NEXT_PUBLIC_* for sensitive keys) — maintain this separation.\",\n    \"Consider using a robust CSV library (e.g., papaparse with proper escaping) instead of manual csvCell() logic to reduce formula-injection risk.\"\n  ]\n}\n```\n\n## Summary\n\nThe codebase demonstrates **generally good security practices**:\n- ✅ Zod validation on all user input\n- ✅ Authentication checks enforced (requireReviewer)\n- ✅ Secrets not exposed to client (follows AGENTS.md rules)\n- ✅ Proper quote escaping in CSV output\n\n**Key Issues**:\n1. **CSV formula injection** (medium) — `csvCell()` doesn't escape `=`, `+`, `-`, `@` characters that trigger formulas in Excel\n2. **Audit logging gaps** (low) — validation errors aren't logged, masking attack attempts\n\nThe vendored packages in `.venv/Lib/` (matplotlib, sklearn, torch, urllib3) are third-party dependencies and do not represent custom code vulnerabilities—they are maintained by their respective projects.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "medium",
+        "file": "web/app/api/audit/export/route.ts",
+        "line": 65,
+        "description": "CSV formula injection vulnerability. The csvCell() function escapes quotes and newlines but does not escape formula-injection characters (=, +, -, @). If audit detail fields contain user-controlled data or values starting with these characters, they could be executed as formulas when opened in Excel/Sheets."
+      },
+      {
+        "severity": "low",
+        "file": "web/app/api/conflicts/route.ts",
+        "line": 15,
+        "description": "Missing error logging context. While badRequest() is called for invalid queries, the detailed Zod error is not logged server-side, which could obscure attack patterns or injection attempts."
+      }
+    ],
+    "riskScore": 28,
+    "recommendations": [
+      "Fix CSV injection by escaping formula characters in csvCell(): prepend a single quote (') to values starting with =, +, -, or @, or use a CSV library that handles this automatically.",
+      "Add server-side logging for Zod validation failures in conflicts/route.ts to detect malformed query injection attempts.",
+      "Verify that auditDetailLine() and auditNote() in audit/export/route.ts do not introduce unescaped user input into CSV output.",
+      "Audit the loadQueue() server function (not shown) to ensure SQL queries are parameterized and not vulnerable to injection.",
+      "All authentication checks (requireReviewer()) are correct; maintain this pattern across all sensitive routes.",
+      "The codebase correctly keeps secrets out of client code (no NEXT_PUBLIC_* for sensitive keys) — maintain this separation.",
+      "Consider using a robust CSV library (e.g., papaparse with proper escaping) instead of manual csvCell() logic to reduce formula-injection risk."
+    ]
+  },
+  "durationMs": 36699,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-08T02:37:00.029Z",
+  "executionId": "audit_1786156583330_82ehlr"
+}

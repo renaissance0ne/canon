@@ -1,0 +1,16 @@
+[2026-08-08T02:28:18.676Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "The artifact publish needs your approval, which didn't go through in this pass — no worries, I won't retry it. Here's the summary directly, and the full report (with runnable test skeletons) is saved at `C:\\Users\\renai\\AppData\\Local\\Temp\\claude\\f--canon\\c0bad488-1129-42bb-a87f-9f582651450c\\scratchpad\\coverage-report.html` if you want to open it in a browser or ask me to publish it again.\n\n**Headline finding: zero test infrastructure exists anywhere in the repo** — no test files, no `vitest`/`jest` in `web/package.json`, and `engine/pyproject.toml` lists `pytest` as a dependency but has no `conftest.py` or test directory.\n\n**The two layers need very different treatment:**\n\n- **`engine/`** — ~93% is scaffolding. Every pipeline stage, connector, agent node, baseline, and eval function is `raise NotImplementedError(\"Phase N — ...\")`. The only real code is `should_auto_apply()`, `severity_for_orphan()`, `rule_specificity()`, and the Pydantic `SurvivorshipRule` validator. Test skeletons for the stubs are written as TDD scaffolding (the spec for Phase 2/3), not coverage of code that runs today.\n- **`web/`** — substantially built and entirely untested. Real logic in `lib/*.ts` (diff rendering, value-fold validation, formatting), `lib/server/*.ts` (queue queries, review state machine, export/CSV, engine client), `types/*.ts` (schema-derived helpers), and all `app/api/*` route handlers.\n\n**Two things need your sign-off before any of this can run:**\n1. Adding `vitest` to `web/` (no test runner currently installed) — per AGENTS.md's \"don't install without approval.\"\n2. Deciding what Postgres instance `lib/server/*` integration tests are allowed to touch (a disposable local DB vs. a Supabase branch), since those functions do real joins that a mocked query builder would just re-fake.\n\n**Highest-value place to start** (pure function, zero mocking, guards a real write path): `web/lib/validate-value.ts` — it's the web-side enforcement of AGENTS.md's \"the model/human never invents a value\" rule, currently with no test on any branch.\n\nThe full report covers, with a test skeleton for each: character-diff edge cases, value-fold/normalization edge cases, the review state machine (`recordReview`'s 5+ branches), CSV escaping, engine-unreachable resilience, Zod query-param parsing (`sev=4,3,bogus`), API route error paths, and the Zod↔Pydantic tool-contract parity gap between the two layers.\n",
+  "parsedOutput": {
+    "sections": [],
+    "codeBlocks": []
+  },
+  "durationMs": 419000,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "testgaps",
+  "timestamp": "2026-08-08T02:28:18.676Z",
+  "executionId": "testgaps_1786155679676_d8fscy"
+}

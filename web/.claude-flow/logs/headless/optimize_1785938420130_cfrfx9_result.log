@@ -1,0 +1,60 @@
+[2026-08-05T14:02:19.852Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "## Summary\n\nThis is an early-stage Next.js 16 / React 19 app (Server Components + Drizzle/Postgres + Clerk). It's much smaller than a typical target for this kind of audit: **one DB table is actually queried** (`sources`), there's **no client-side data fetching, no `useEffect`, no `setInterval`/`setTimeout`, and no `useState`/`useMemo` anywhere in the codebase**. So most classic categories below are either \"nothing found\" or \"risk that will appear once the Runs/Conflicts/Rules/Audit pages referenced in `nav-rail.tsx` get built.\" I'm reporting it that way rather than inventing problems.\n\n### 1. N+1 query patterns\nNone exist yet — there's only one query site (`listSources`), no loops issuing per-row queries. The forward-looking risk is in the schema: `runs → matches → conflicts → resolutions → audit_log` is a classic fan-out chain, and today `entities` is the only table with a non-PK index (`lib/db/schema.ts:115`). When the Conflicts/Audit pages are built, watch for patterns like \"for each match, fetch its conflicts\" instead of a single joined/`inArray` query, and add indexes on `runs.sourceAId/sourceBId`, `matches.runId`, `conflicts.runId/matchId`, `audit_log.runId` before those pages ship.\n\n### 2. Unnecessary React re-renders\nNothing to flag — only 3 client components exist (`nav-rail.tsx`, `get-started-hero.tsx`, `landing-nav.tsx` via Clerk's `Show`), none hold non-trivial state, and everything else is a Server Component rendered once per request. `SourceTable` already keys rows correctly (`key={source.id}`).\n\n### 3. Caching opportunities (real finding)\n`lib/server/sources.ts:23-30` — `countSourcesBySide()` re-fetches and re-validates **every row** through Zod just to produce three counts, and does the aggregation in JS with three separate `.filter()` passes:\n\n```ts\nexport async function countSourcesBySide() {\n  const all = await listSources();\n  return {\n    crm: all.filter((s) => s.kind === \"salesforce\" || s.kind === \"hubspot\").length,\n    warehouse: all.filter((s) => s.kind === \"databricks\" || s.kind === \"snowflake\").length,\n    synthetic: all.filter((s) => s.kind === \"synthetic\").length,\n  };\n}\n```\n\nBetter as a single SQL aggregate:\n\n```ts\nimport { sql } from \"drizzle-orm\";\n\nexport async function countSourcesBySide() {\n  const [row] = await getDb()\n    .select({\n      crm: sql<number>`count(*) filter (where kind in ('salesforce','hubspot'))`,\n      warehouse: sql<number>`count(*) filter (where kind in ('databricks','snowflake'))`,\n      synthetic: sql<number>`count(*) filter (where kind = 'synthetic')`,\n    })\n    .from(sources);\n  return row;\n}\n```\n\nSeparately: `listSources()` has no per-request memoization. It's only called once per route today, but if a second Server Component in the same render tree later calls it (likely, once Runs/Conflicts pages need the source list too), Drizzle will issue a second DB round-trip in the same request — `fetch()` gets Next's request memoization for free, raw DB clients don't. Wrap it in React's `cache()`:\n\n```ts\nimport { cache } from \"react\";\n\nexport const listSources = cache(async (): Promise<Source[]> => {\n  await connection();\n  const rows = await getDb().select().from(sources).orderBy(sources.createdAt);\n  return rows.map((row) => sourceSchema.parse(row));\n});\n```\n\nAlso worth a conscious decision: `connection()` (`sources.ts:17`) forces every consumer of `listSources` to be fully dynamic, opting out of any route-level caching. Given sources change rarely (they're admin-configured), `unstable_cache` with a tag invalidated on write might serve this better than a DB hit on every request — but that's a tradeoff call, not a bug.\n\n### 4. Memory leaks\nNone found. No subscriptions, timers, event listeners, or `useEffect` cleanup to audit — there's simply no client-side lifecycle code yet. The one thing worth confirming as the app grows: `lib/db/index.ts` already does the right thing here (caches the `postgres()` client on `globalThis` to survive HMR reloads in dev), so no connection-pool leak risk.\n\n### 5. Redundant computations\nOnly the `countSourcesBySide` case above (full row fetch + Zod parse of every row, done purely to produce three numbers).\n\n**Bottom line:** nothing urgent to fix today. The one concrete change worth making now is switching `countSourcesBySide` to a SQL aggregate and wrapping `listSources` in `cache()`, since both are cheap now and get more valuable as more pages start reading `sources`. The bigger performance surface (N+1 risk, index needs, list re-renders) doesn't exist yet because Runs/Conflicts/Rules/Audit haven't been built — worth revisiting this analysis once those pages land.\n",
+  "parsedOutput": {
+    "sections": [
+      {
+        "title": "Summary",
+        "content": "\nThis is an early-stage Next.js 16 / React 19 app (Server Components + Drizzle/Postgres + Clerk). It's much smaller than a typical target for this kind of audit: **one DB table is actually queried** (`sources`), there's **no client-side data fetching, no `useEffect`, no `setInterval`/`setTimeout`, and no `useState`/`useMemo` anywhere in the codebase**. So most classic categories below are either \"nothing found\" or \"risk that will appear once the Runs/Conflicts/Rules/Audit pages referenced in `nav-rail.tsx` get built.\" I'm reporting it that way rather than inventing problems.\n\n",
+        "level": 2
+      },
+      {
+        "title": "1. N+1 query patterns",
+        "content": "None exist yet — there's only one query site (`listSources`), no loops issuing per-row queries. The forward-looking risk is in the schema: `runs → matches → conflicts → resolutions → audit_log` is a classic fan-out chain, and today `entities` is the only table with a non-PK index (`lib/db/schema.ts:115`). When the Conflicts/Audit pages are built, watch for patterns like \"for each match, fetch its conflicts\" instead of a single joined/`inArray` query, and add indexes on `runs.sourceAId/sourceBId`, `matches.runId`, `conflicts.runId/matchId`, `audit_log.runId` before those pages ship.\n\n",
+        "level": 3
+      },
+      {
+        "title": "2. Unnecessary React re-renders",
+        "content": "Nothing to flag — only 3 client components exist (`nav-rail.tsx`, `get-started-hero.tsx`, `landing-nav.tsx` via Clerk's `Show`), none hold non-trivial state, and everything else is a Server Component rendered once per request. `SourceTable` already keys rows correctly (`key={source.id}`).\n\n",
+        "level": 3
+      },
+      {
+        "title": "3. Caching opportunities (real finding)",
+        "content": "`lib/server/sources.ts:23-30` — `countSourcesBySide()` re-fetches and re-validates **every row** through Zod just to produce three counts, and does the aggregation in JS with three separate `.filter()` passes:\n\n```ts\nexport async function countSourcesBySide() {\n  const all = await listSources();\n  return {\n    crm: all.filter((s) => s.kind === \"salesforce\" || s.kind === \"hubspot\").length,\n    warehouse: all.filter((s) => s.kind === \"databricks\" || s.kind === \"snowflake\").length,\n    synthetic: all.filter((s) => s.kind === \"synthetic\").length,\n  };\n}\n```\n\nBetter as a single SQL aggregate:\n\n```ts\nimport { sql } from \"drizzle-orm\";\n\nexport async function countSourcesBySide() {\n  const [row] = await getDb()\n    .select({\n      crm: sql<number>`count(*) filter (where kind in ('salesforce','hubspot'))`,\n      warehouse: sql<number>`count(*) filter (where kind in ('databricks','snowflake'))`,\n      synthetic: sql<number>`count(*) filter (where kind = 'synthetic')`,\n    })\n    .from(sources);\n  return row;\n}\n```\n\nSeparately: `listSources()` has no per-request memoization. It's only called once per route today, but if a second Server Component in the same render tree later calls it (likely, once Runs/Conflicts pages need the source list too), Drizzle will issue a second DB round-trip in the same request — `fetch()` gets Next's request memoization for free, raw DB clients don't. Wrap it in React's `cache()`:\n\n```ts\nimport { cache } from \"react\";\n\nexport const listSources = cache(async (): Promise<Source[]> => {\n  await connection();\n  const rows = await getDb().select().from(sources).orderBy(sources.createdAt);\n  return rows.map((row) => sourceSchema.parse(row));\n});\n```\n\nAlso worth a conscious decision: `connection()` (`sources.ts:17`) forces every consumer of `listSources` to be fully dynamic, opting out of any route-level caching. Given sources change rarely (they're admin-configured), `unstable_cache` with a tag invalidated on write might serve this better than a DB hit on every request — but that's a tradeoff call, not a bug.\n\n",
+        "level": 3
+      },
+      {
+        "title": "4. Memory leaks",
+        "content": "None found. No subscriptions, timers, event listeners, or `useEffect` cleanup to audit — there's simply no client-side lifecycle code yet. The one thing worth confirming as the app grows: `lib/db/index.ts` already does the right thing here (caches the `postgres()` client on `globalThis` to survive HMR reloads in dev), so no connection-pool leak risk.\n\n",
+        "level": 3
+      },
+      {
+        "title": "5. Redundant computations",
+        "content": "Only the `countSourcesBySide` case above (full row fetch + Zod parse of every row, done purely to produce three numbers).\n\n**Bottom line:** nothing urgent to fix today. The one concrete change worth making now is switching `countSourcesBySide` to a SQL aggregate and wrapping `listSources` in `cache()`, since both are cheap now and get more valuable as more pages start reading `sources`. The bigger performance surface (N+1 risk, index needs, list re-renders) doesn't exist yet because Runs/Conflicts/Rules/Audit haven't been built — worth revisiting this analysis once those pages land.",
+        "level": 3
+      }
+    ],
+    "codeBlocks": [
+      {
+        "language": "ts",
+        "code": "export async function countSourcesBySide() {\n  const all = await listSources();\n  return {\n    crm: all.filter((s) => s.kind === \"salesforce\" || s.kind === \"hubspot\").length,\n    warehouse: all.filter((s) => s.kind === \"databricks\" || s.kind === \"snowflake\").length,\n    synthetic: all.filter((s) => s.kind === \"synthetic\").length,\n  };\n}"
+      },
+      {
+        "language": "ts",
+        "code": "import { sql } from \"drizzle-orm\";\n\nexport async function countSourcesBySide() {\n  const [row] = await getDb()\n    .select({\n      crm: sql<number>`count(*) filter (where kind in ('salesforce','hubspot'))`,\n      warehouse: sql<number>`count(*) filter (where kind in ('databricks','snowflake'))`,\n      synthetic: sql<number>`count(*) filter (where kind = 'synthetic')`,\n    })\n    .from(sources);\n  return row;\n}"
+      },
+      {
+        "language": "ts",
+        "code": "import { cache } from \"react\";\n\nexport const listSources = cache(async (): Promise<Source[]> => {\n  await connection();\n  const rows = await getDb().select().from(sources).orderBy(sources.createdAt);\n  return rows.map((row) => sourceSchema.parse(row));\n});"
+      }
+    ]
+  },
+  "durationMs": 119722,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "optimize",
+  "timestamp": "2026-08-05T14:02:19.852Z",
+  "executionId": "optimize_1785938420130_cfrfx9"
+}

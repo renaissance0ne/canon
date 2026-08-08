@@ -4,36 +4,43 @@ version = "0.1.0"
 description = "Canon reconciliation engine — connectors, pipeline, resolution agent, evaluation harness."
 requires-python = ">=3.12"
 
+# Floors track the majors this project is actually developed and checked
+# against, not the oldest version that happens to import. Several of these
+# libraries have crossed a major since the floors were first written —
+# langgraph 0.2 and 1.x are different APIs, and so are pandas 2 and 3. A floor
+# that spans that break lets `uv sync` resolve a tree nobody has ever run,
+# which is exactly the class of surprise the run-reproducibility rules exist to
+# prevent. Raise a floor when the pinned major moves; do not lower one.
 dependencies = [
     # Job control surface
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
+    "fastapi>=0.141",
+    "uvicorn[standard]>=0.52",
     # Every payload crossing the layer boundary is a Pydantic model
-    "pydantic>=2.9",
-    "python-dotenv>=1.0",
+    "pydantic>=2.13",
+    "python-dotenv>=1.2",
     # Connectors
     "simple-salesforce>=1.12",
-    "databricks-sql-connector>=3.4",
+    "databricks-sql-connector>=4.4",
     # Pipeline
-    "pandas>=2.2",
-    "sentence-transformers>=3.3",
-    "faiss-cpu>=1.9",
-    "rapidfuzz>=3.10",
+    "pandas>=3.0",
+    "sentence-transformers>=5.6",
+    "faiss-cpu>=1.15",
+    "rapidfuzz>=3.14",
     # Resolution agent
-    "langgraph>=0.2",
-    "anthropic>=0.40",
+    "langgraph>=1.2",
+    "anthropic>=0.120",
     # Owned-table writes
-    "psycopg[binary]>=3.2",
+    "psycopg[binary]>=3.3",
 ]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.8",
-    "mypy>=1.13",
-    "pytest>=8.3",
+    "ruff>=0.16",
+    "mypy>=2.3",
+    "pytest>=9.1",
     # eval/report.py writes grayscale figures into docs/results/
-    "matplotlib>=3.9",
-    "pandas-stubs>=2.2",
+    "matplotlib>=3.11",
+    "pandas-stubs>=3.0",
 ]
 
 [build-system]

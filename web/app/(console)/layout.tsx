@@ -6,7 +6,7 @@ export default function ConsoleLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="field-grid flex min-h-dvh">
+    <div className="flex min-h-dvh bg-surface-sunken">
       <NavRail />
       <main className="min-w-0 flex-1">
         <div className="mx-auto max-w-[1400px]">{children}</div>
