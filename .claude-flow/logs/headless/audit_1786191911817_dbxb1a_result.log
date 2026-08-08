@@ -1,0 +1,41 @@
+[2026-08-08T12:25:47.707Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/app/api/conflicts/route.ts\",\n      \"line\": 24,\n      \"description\": \"Missing validation on 'page' and 'severity' query parameters could allow injection into database queries if loadQueue() doesn't properly sanitize. While queueQuerySchema should handle this, verify the schema definition includes strict integer/enum validation.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"web/app/api/audit/export/route.ts\",\n      \"line\": 28,\n      \"description\": \"The auditActionSchema validation is performed after assignment. While Zod parse is used, ensure this schema rejects unexpected action values to prevent query injection into listAuditForExport().\"\n    }\n  ],\n  \"riskScore\": 15,\n  \"recommendations\": [\n    \"Verify that all Zod schemas (queueQuerySchema, auditActionSchema) explicitly define allowed enum values and reject unknown values\",\n    \"Confirm that Drizzle ORM in web/lib/server/audit.ts and web/lib/server/conflicts.ts uses parameterized queries exclusively — no string interpolation in SQL\",\n    \"Ensure .env files are in .gitignore and never committed; the project correctly places all secrets in engine/.env only, but verify this is enforced via pre-commit hooks\",\n    \"Audit web/lib/server/auth.ts requireReviewer() function to ensure it validates session tokens correctly and checks reviewer permissions\",\n    \"Verify that NEXT_PUBLIC_* environment variables do not contain any secrets; currently none are visible in the code\",\n    \"Confirm database connection strings and API keys are never logged or exposed in error messages — check error handling in route handlers\",\n    \"For the engine layer, verify that Pydantic models validate all incoming data and SQL queries use parameterized statements with psycopg3\",\n    \"Review web/lib/server/engine.ts to ensure all HTTP calls to the engine (http://localhost:8000) use HTTPS in production and validate responses\",\n    \"Verify CSV export properly escapes all fields — the csvCell() function looks correct but test edge cases (quotes, newlines, special characters)\",\n    \"Ensure the audit trail (append-only log) cannot be bypassed or deleted; verify database constraints and application logic prevent audit_log updates\"\n  ]\n}\n```\n\n---\n\n## Summary\n\nThe provided codebase shows **good security practices overall**. The API route handlers properly validate input with Zod schemas and enforce authentication checks. Key observations:\n\n**What's working well:**\n- Input validation on all query parameters (Zod schemas)\n- Authentication enforcement with `requireReviewer()`\n- Proper CSV escaping in the audit export\n- Secrets are kept out of the codebase (as per AGENTS.md guidelines)\n- No hardcoded API keys or credentials visible\n\n**Verify before deployment:**\n1. Check that Zod schemas are strict (enum validation for status/action fields)\n2. Confirm Drizzle ORM queries use parameterized statements (no raw SQL)\n3. Validate the `requireReviewer()` auth check properly validates sessions\n4. Ensure engine-to-web communication uses HTTPS in production\n5. Verify `.env` files are properly ignored in git and not committed\n\nThe **most critical review point** is the database layer—ensure all queries across `web/lib/server/` use parameterized statements via Drizzle ORM, not string interpolation.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "low",
+        "file": "web/app/api/conflicts/route.ts",
+        "line": 24,
+        "description": "Missing validation on 'page' and 'severity' query parameters could allow injection into database queries if loadQueue() doesn't properly sanitize. While queueQuerySchema should handle this, verify the schema definition includes strict integer/enum validation."
+      },
+      {
+        "severity": "low",
+        "file": "web/app/api/audit/export/route.ts",
+        "line": 28,
+        "description": "The auditActionSchema validation is performed after assignment. While Zod parse is used, ensure this schema rejects unexpected action values to prevent query injection into listAuditForExport()."
+      }
+    ],
+    "riskScore": 15,
+    "recommendations": [
+      "Verify that all Zod schemas (queueQuerySchema, auditActionSchema) explicitly define allowed enum values and reject unknown values",
+      "Confirm that Drizzle ORM in web/lib/server/audit.ts and web/lib/server/conflicts.ts uses parameterized queries exclusively — no string interpolation in SQL",
+      "Ensure .env files are in .gitignore and never committed; the project correctly places all secrets in engine/.env only, but verify this is enforced via pre-commit hooks",
+      "Audit web/lib/server/auth.ts requireReviewer() function to ensure it validates session tokens correctly and checks reviewer permissions",
+      "Verify that NEXT_PUBLIC_* environment variables do not contain any secrets; currently none are visible in the code",
+      "Confirm database connection strings and API keys are never logged or exposed in error messages — check error handling in route handlers",
+      "For the engine layer, verify that Pydantic models validate all incoming data and SQL queries use parameterized statements with psycopg3",
+      "Review web/lib/server/engine.ts to ensure all HTTP calls to the engine (http://localhost:8000) use HTTPS in production and validate responses",
+      "Verify CSV export properly escapes all fields — the csvCell() function looks correct but test edge cases (quotes, newlines, special characters)",
+      "Ensure the audit trail (append-only log) cannot be bypassed or deleted; verify database constraints and application logic prevent audit_log updates"
+    ]
+  },
+  "durationMs": 35890,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-08T12:25:47.707Z",
+  "executionId": "audit_1786191911817_dbxb1a"
+}

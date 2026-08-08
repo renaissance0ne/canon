@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-08T07:44:21.457Z",
+  "timestamp": "2026-08-08T17:27:55.876Z",
   "projectRoot": "F:\\canon\\web",
   "structure": {
     "hasPackageJson": true,
@@ -7,5 +7,5 @@
     "hasClaudeConfig": true,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1786175061457
+  "scannedAt": 1786210075877
 }

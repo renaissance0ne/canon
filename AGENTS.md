@@ -1000,8 +1000,9 @@ Use TypeScript strictly across `web/`.
 | What | Where | Never |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Engine `.env` only | `web/`, any client bundle |
-| `SALESFORCE_CLIENT_ID` / `_SECRET` / `_USERNAME` / `_PASSWORD` / `_TOKEN` | Engine `.env` only | `web/`, `sources.config` |
-| `DATABRICKS_TOKEN` / `SNOWFLAKE_PASSWORD` | Engine `.env` only | `web/`, `sources.config` |
+| `CANON_CREDENTIAL_KEY` | Engine `.env` + `web/.env`, identical value | Any client bundle, `sources.config` |
+| Source credentials (tokens, passwords, keys, OAuth grants) | `source_credentials`, encrypted | Engine `.env`, `sources.config`, any read path |
+| OAuth **app** registrations (`*_OAUTH_CLIENT_ID` / `_SECRET`) | `web/.env` only | Engine `.env`, public env |
 | `DATABASE_URL` | Engine `.env` + `web/.env` (server) | Any Client Component |
 | `SUPABASE_SERVICE_ROLE_KEY` | `web/.env` (server only) | Client Components, engine |
 | `ENGINE_URL` | `web/.env` | Public env (`NEXT_PUBLIC_*`) |
@@ -1009,10 +1010,38 @@ Use TypeScript strictly across `web/`.
 No secret is ever prefixed `NEXT_PUBLIC_`. There is no legitimate reason for this
 project to expose anything to the browser beyond the app's own API routes.
 
-Source credentials are keyed by source `kind` in the engine's environment;
-`sources.config` in Postgres holds only non-secret connection shape (object
-names, table names, filters). If you find yourself writing a password into a
-jsonb column, stop.
+### Where source credentials live
+
+**Not in the engine's environment.** They used to be, keyed by source `kind`.
+That could not express two Salesforce orgs, could not be rotated without a
+deploy, and gave every run the same identity regardless of who started it.
+
+They now live in `source_credentials`, one row per source, sealed with
+AES-256-GCM before they are written. The web layer encrypts; the engine
+decrypts, in its own process, for the length of a run. The shape of each
+platform's credential is declared once in `web/types/credentials.ts` and
+mirrored in `engine/pipeline/credentials.py` — same rule as the tool contract,
+change both in the same commit.
+
+The rules that constrain this are absolute:
+
+- **`sources.config` still holds only non-secret connection shape** — object
+  names, table names, filters. If you find yourself writing a password into a
+  jsonb column, stop.
+- **No read path returns a stored secret.** Not masked, not partially, not for
+  an admin. `readStatus` returns which key *names* exist and nothing more, and
+  the console renders a credential's existence rather than its value.
+- **The ciphertext is bound to its row.** The GCM AAD is
+  `canon:source-credential:v<version>:<sourceId>`, so a ciphertext copied onto
+  another source will not decrypt. Do not remove this to "simplify" the crypto.
+- **OAuth is preferred wherever a platform supports it**, and is listed first in
+  the schema. It is the only method where Canon holds a scoped, expiring,
+  revocable grant rather than a reusable password. Its tokens are minted by
+  `/api/oauth/:kind/callback` and cannot be submitted to the credentials
+  endpoint by a browser.
+- **`source_credentials` is web-owned.** The engine reads and decrypts it; the
+  only write it makes is `last_verified_at`, which records a connection attempt
+  rather than changing the credential.
 
 ---
 

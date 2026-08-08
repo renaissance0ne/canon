@@ -4,9 +4,12 @@ import { RunTable } from "@/components/runs/run-table";
 import { Button } from "@/components/ui/button";
 import { listRuns } from "@/lib/server/runs";
 import { formatCount } from "@/lib/format";
+import { requireReviewer } from "@/lib/server/auth";
 
 /** The console's home. A run is the unit of work, so this is the unit of history. */
 export default async function RunsPage() {
+  await requireReviewer();
+
   const runs = await listRuns();
 
   return (

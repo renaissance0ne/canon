@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/button";
 import { listRulesets } from "@/lib/server/rulesets";
 import { listSources } from "@/lib/server/sources";
 import { SOURCE_KIND_SIDE } from "@/types/source";
+import { requireReviewer } from "@/lib/server/auth";
 
 /** Wireframe 1e. Server Component; the form below is the only client boundary. */
 export default async function NewRunPage() {
+  await requireReviewer();
+
   const [sources, rulesets] = await Promise.all([listSources(), listRulesets()]);
 
   const hasCrm = sources.some((s) => SOURCE_KIND_SIDE[s.kind] !== "warehouse");

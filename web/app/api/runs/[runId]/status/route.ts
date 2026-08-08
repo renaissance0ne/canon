@@ -1,4 +1,5 @@
 import { isUuid, notFound } from "@/app/api/_lib/respond";
+import { requireReviewerForApi } from "@/lib/server/auth";
 import { fetchEngineStatus } from "@/lib/server/engine";
 import { getRun } from "@/lib/server/runs";
 import { isTerminalRunStatus, type EngineRunStatus } from "@/types/run";
@@ -17,6 +18,9 @@ import { isTerminalRunStatus, type EngineRunStatus } from "@/types/run";
  * entirely; there is nothing left for it to say.
  */
 export async function GET(_request: Request, ctx: RouteContext<"/api/runs/[runId]/status">) {
+  const gate = await requireReviewerForApi();
+  if (!gate.ok) return gate.response;
+
   const { runId } = await ctx.params;
   if (!isUuid(runId)) return notFound("No such run.");
 

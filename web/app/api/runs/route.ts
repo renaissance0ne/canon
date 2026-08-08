@@ -1,10 +1,11 @@
 import { badRequest, parseJson } from "@/app/api/_lib/respond";
-import { requireReviewer } from "@/lib/server/auth";
+import { requireReviewerForApi } from "@/lib/server/auth";
 import { appendAudit } from "@/lib/server/audit";
 import { EngineUnreachableError, startRun } from "@/lib/server/engine";
 import { createRun, failUndispatchedRun, listRuns } from "@/lib/server/runs";
 import { getRuleset } from "@/lib/server/rulesets";
-import { findSourceIds } from "@/lib/server/sources";
+import { getSource } from "@/lib/server/sources";
+import { credentialsMissingFor } from "@/lib/server/credentials";
 import { createRunSchema } from "@/types/run";
 
 /**
@@ -16,10 +17,15 @@ import { createRunSchema } from "@/types/run";
  */
 
 export async function GET() {
+  const gate = await requireReviewerForApi();
+  if (!gate.ok) return gate.response;
   return Response.json({ runs: await listRuns() });
 }
 
 export async function POST(request: Request) {
+  const gate = await requireReviewerForApi();
+  if (!gate.ok) return gate.response;
+
   const parsed = await parseJson(request, createRunSchema);
   if (!parsed.ok) return parsed.response;
 
@@ -34,18 +40,34 @@ export async function POST(request: Request) {
   // The FKs would catch a missing id, but as a 500 with a constraint name in
   // it. The operator picked these from a dropdown; if one has since been
   // deleted, say so.
-  const [found, ruleset] = await Promise.all([
-    findSourceIds([sourceAId, sourceBId]),
+  //
+  // Loaded in full rather than existence-checked, because the credential gate
+  // below needs each source's kind and name to say anything useful.
+  const [sourceA, sourceB, ruleset] = await Promise.all([
+    getSource(sourceAId),
+    getSource(sourceBId),
     getRuleset(rulesetId),
   ]);
-  if (!found.has(sourceAId)) return badRequest("Source A no longer exists.");
-  if (!found.has(sourceBId)) return badRequest("Source B no longer exists.");
+  if (!sourceA) return badRequest("Source A no longer exists.");
+  if (!sourceB) return badRequest("Source B no longer exists.");
   if (!ruleset) return badRequest("That ruleset version no longer exists.");
+
+  // A run that starts and dies at the extract step because nobody connected
+  // Salesforce burns the whole pipeline and leaves a failed row to explain.
+  // Checking here makes it a 400 on the button press instead — and names the
+  // source, so the fix is one click away rather than a hunt.
+  const unconnected = await credentialsMissingFor([sourceA, sourceB]);
+  if (unconnected.length > 0) {
+    return badRequest(
+      `${unconnected.join(" and ")} ${unconnected.length === 1 ? "has" : "have"} no stored ` +
+        `credentials. Connect ${unconnected.length === 1 ? "it" : "them"} before starting a run.`,
+    );
+  }
 
   // Who started this. `actor` is resolved from the session, never from the
   // request body — an audit trail whose actor is whatever the client sent is
-  // not an audit trail.
-  const reviewer = await requireReviewer();
+  // not an audit trail. The gate at the top of the handler already resolved it.
+  const reviewer = gate.reviewer;
 
   const run = await createRun(parsed.data);
 

@@ -3,6 +3,7 @@ import { RulesetEditor } from "@/components/rules/ruleset-editor";
 import { listRulesets } from "@/lib/server/rulesets";
 import { listSources } from "@/lib/server/sources";
 import { formatTimestamp } from "@/lib/format";
+import { requireReviewer } from "@/lib/server/auth";
 
 /**
  * Wireframe 1d — survivorship policy.
@@ -13,6 +14,8 @@ import { formatTimestamp } from "@/lib/format";
  * the page, readable, forever.
  */
 export default async function RulesPage() {
+  await requireReviewer();
+
   const [rulesets, sources] = await Promise.all([listRulesets(), listSources()]);
   const active = rulesets.find((ruleset) => ruleset.isActive) ?? null;
   const history = rulesets.filter((ruleset) => ruleset.id !== active?.id);

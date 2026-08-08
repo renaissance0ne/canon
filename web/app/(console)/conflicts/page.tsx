@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { loadQueue } from "@/lib/server/conflicts";
 import { formatCount, shortRunId } from "@/lib/format";
 import { QUEUE_PAGE_SIZE, queueQuerySchema, type QueueQuery } from "@/types/queue";
+import { requireReviewer } from "@/lib/server/auth";
 
 /**
  * Wireframes 1i, 1j, 1k — the conflict queue, in three directions, plus the
@@ -31,6 +32,8 @@ export default async function ConflictsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requireReviewer();
+
   const params = await searchParams;
   const query = parseQuery(params);
   const load = await loadQueue(query);

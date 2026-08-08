@@ -1,4 +1,5 @@
 import { parseJson } from "@/app/api/_lib/respond";
+import { requireReviewerForApi } from "@/lib/server/auth";
 import { createSource, listSources } from "@/lib/server/sources";
 import { createSourceSchema } from "@/types/source";
 
@@ -13,14 +14,20 @@ import { createSourceSchema } from "@/types/source";
  * travel in. Connection secrets live in the engine's environment keyed by
  * `kind` (AGENTS.md § Security Rules).
  *
- * The session requirement is enforced by proxy.ts, which matches /api/*.
+ * The session requirement is enforced by `requireReviewerForApi()` on each
+ * handler below, not by path matching in proxy.ts.
  */
 
 export async function GET() {
+  const gate = await requireReviewerForApi();
+  if (!gate.ok) return gate.response;
   return Response.json({ sources: await listSources() });
 }
 
 export async function POST(request: Request) {
+  const gate = await requireReviewerForApi();
+  if (!gate.ok) return gate.response;
+
   const parsed = await parseJson(request, createSourceSchema);
   if (!parsed.ok) return parsed.response;
 

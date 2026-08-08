@@ -31,6 +31,11 @@ dependencies = [
     "anthropic>=0.120",
     # Owned-table writes
     "psycopg[binary]>=3.3",
+    # AES-256-GCM for stored source credentials. Already present transitively
+    # (simple-salesforce → pyjwt[crypto]), and declared directly because
+    # credentials.py imports it: relying on another package's dependency to
+    # keep providing your cipher is how a `uv sync` silently removes it.
+    "cryptography>=46",
 ]
 
 [dependency-groups]

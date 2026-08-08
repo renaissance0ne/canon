@@ -1,17 +1,71 @@
 {
-  "timestamp": "2026-08-08T07:50:58.296Z",
-  "mode": "local",
-  "memoryUsage": {
-    "rss": 75120640,
-    "heapTotal": 35168256,
-    "heapUsed": 25917584,
-    "external": 4056940,
-    "arrayBuffers": 120147
+  "timestamp": "2026-08-08T17:32:54.474Z",
+  "mode": "headless",
+  "workerType": "optimize",
+  "model": "sonnet",
+  "durationMs": 248148,
+  "executionId": "optimize_1786210126326_wkbznw",
+  "success": true,
+  "findings": {
+    "sections": [
+      {
+        "title": "Performance Analysis — Canon",
+        "content": "\nThe codebase is mid-build (per `AGENTS.md`'s phased plan), so several categories are thin because the code doesn't exist yet (engine's blocking/detect/agent modules are `NotImplementedError` stubs for Phase 2/3). I've reported honestly where that's the case rather than inventing issues.\n\n",
+        "level": 2
+      },
+      {
+        "title": "1. N+1 queries",
+        "content": "\nNo N+1 loops exist — `web/lib/server/conflicts.ts`, `audit.ts`, `entities.ts` are already written as batched/grouped single queries. The actual problem is **missing indexes** to back those queries at scale (runs of thousands of entities, queues of hundreds of conflicts):\n\n```ts\n// web/lib/db/schema.ts:214 — conflicts has no index on run_id,\n// yet every queue/export read does WHERE conflicts.run_id = $1\nexport const conflicts = pgTable(\"conflicts\", { ... });\n\n// schema.ts:232 — resolutions has no index on conflict_id,\n// yet it's LEFT JOINed on resolutions.conflict_id = conflicts.id everywhere\nexport const resolutions = pgTable(\"resolutions\", { ... });\n```\n\nFix — add explicit indexes:\n```ts\nexport const conflicts = pgTable(\"conflicts\", {...}, (t) => [\n  index(\"conflicts_run_id_idx\").on(t.runId),\n]);\nexport const resolutions = pgTable(\"resolutions\", {...}, (t) => [\n  index(\"resolutions_conflict_id_idx\").on(t.conflictId),\n]);\n```\nSame gap on `matches` (no index on `runId`) and `auditLog` (no index on `runId`/`action`, and `listAuditForExport` in `audit.ts:140` is explicitly unpaged). Generate a migration with `npx drizzle-kit generate` once added.\n\n",
+        "level": 3
+      },
+      {
+        "title": "2. Unnecessary React re-renders",
+        "content": "\n`web/components/conflicts/conflict-focus.tsx:57` and `conflict-dense-table.tsx:65` render up to 100 unmemoized rows. `ConflictQueue`'s `move()` (`conflict-queue.tsx:65`) updates `selectedIndex` on every `j`/`k` keypress, re-rendering all rows even though only 2 actually change class:\n\n```tsx\n// conflict-focus.tsx:57 — not memoized\nfunction ListRow({ row, selected }: { row: ConflictRow; selected: boolean }) { ... }\n\n// fix:\nconst ListRow = React.memo(function ListRow({ row, selected }: Props) { ... });\n```\nThis matters specifically because AGENTS.md's design mandates full keyboard review of 400-row queues — every keystroke currently does ~100x more render work than needed.\n\n`web/components/runs/run-live.tsx:46` — the 2s status poll produces a fresh object reference each tick even when `stats`/`status` haven't changed, forcing `StatGrid` to re-render on every poll:\n```tsx\n// fix: use select to avoid re-render when values are unchanged\nuseQuery({\n  queryKey: [\"run\", runId, \"status\"],\n  queryFn: fetchStatus,\n  refetchInterval: 2000,\n  select: (d) => d, // pair with structural-sharing or a custom equality check\n});\n```\n\n",
+        "level": 3
+      },
+      {
+        "title": "3. Caching opportunities",
+        "content": "\nThe big one is real but **not a bug yet** — it's a documented gap: `engine/agent/prompts.py:1-6` correctly identifies the ruleset block as the prompt-cache prefix (\"the single largest cost lever\"), but `build_ruleset_block`/`build_conflict_block` are `NotImplementedError(\"Phase 3\")`. When implemented, use `cache_control: {type: \"ephemeral\"}` on the ruleset block per AGENTS.md's Model Selection section — worth flagging now so it isn't missed when `agent/graph.py` gets built out.\n\nNo other caching gaps: TanStack Query is correctly scoped to only the run-status poll (`query-provider.tsx`), everything else is Server Components reading Postgres directly with no redundant repeated reads found.\n\n",
+        "level": 3
+      },
+      {
+        "title": "4. Memory leaks",
+        "content": "\nNone found. `web/lib/db/index.ts:24` caches the pg connection on `globalThis` to survive Next.js HMR. All `useEffect` intervals/listeners clean up correctly (`run-live.tsx:101` clears its interval, `conflict-queue.tsx:130` removes its keydown listener on unmount). The engine's FAISS/embedding concern is moot — `blocking.py` is entirely a stub, so there's no index or in-memory cache yet to leak.\n\n",
+        "level": 3
+      },
+      {
+        "title": "5. Redundant computations",
+        "content": "`web/components/rules/ruleset-editor.tsx:166-179` — O(n²) render due to double `indexOf`:\n```tsx\n{ordered.map((rule) => {\n  const index = rules.indexOf(rule);        // O(n) scan\n  return <RuleRow position={ordered.indexOf(rule) + 1} ... />;  // another O(n) scan\n})}\n```\nFix — pair rules with their index once before sorting:\n```tsx\nconst withIndex = rules.map((rule, index) => ({ rule, index }));\nconst ordered = [...withIndex].sort(bySpecificity);\n{ordered.map(({ rule, index }, position) => (\n  <RuleRow key={rule.id} rule={rule} position={position + 1} onChange={(patch) => update(index, patch)} />\n))}\n```\nLow impact today (rulesets are policy tables, tens of rows), but cheap to fix. Engine-side `normalize.py`/`detect.py` are Phase 2 stubs — no redundant fold/severity computation exists to find yet; their docstrings already commit to the correct O(n·k) blocking design.\n\n**Bottom line:** the codebase is disciplined about avoiding N+1s and leaks by construction; the concrete, worth-fixing issues today are the four missing Drizzle indexes (#1) and un-memoized conflict-queue rows (#2). Everything else is either negligible at current scale or not yet built.",
+        "level": 3
+      }
+    ],
+    "codeBlocks": [
+      {
+        "language": "ts",
+        "code": "// web/lib/db/schema.ts:214 — conflicts has no index on run_id,\n// yet every queue/export read does WHERE conflicts.run_id = $1\nexport const conflicts = pgTable(\"conflicts\", { ... });\n\n// schema.ts:232 — resolutions has no index on conflict_id,\n// yet it's LEFT JOINed on resolutions.conflict_id = conflicts.id everywhere\nexport const resolutions = pgTable(\"resolutions\", { ... });"
+      },
+      {
+        "language": "ts",
+        "code": "export const conflicts = pgTable(\"conflicts\", {...}, (t) => [\n  index(\"conflicts_run_id_idx\").on(t.runId),\n]);\nexport const resolutions = pgTable(\"resolutions\", {...}, (t) => [\n  index(\"resolutions_conflict_id_idx\").on(t.conflictId),\n]);"
+      },
+      {
+        "language": "tsx",
+        "code": "// conflict-focus.tsx:57 — not memoized\nfunction ListRow({ row, selected }: { row: ConflictRow; selected: boolean }) { ... }\n\n// fix:\nconst ListRow = React.memo(function ListRow({ row, selected }: Props) { ... });"
+      },
+      {
+        "language": "tsx",
+        "code": "// fix: use select to avoid re-render when values are unchanged\nuseQuery({\n  queryKey: [\"run\", runId, \"status\"],\n  queryFn: fetchStatus,\n  refetchInterval: 2000,\n  select: (d) => d, // pair with structural-sharing or a custom equality check\n});"
+      },
+      {
+        "language": "tsx",
+        "code": "{ordered.map((rule) => {\n  const index = rules.indexOf(rule);        // O(n) scan\n  return <RuleRow position={ordered.indexOf(rule) + 1} ... />;  // another O(n) scan\n})}"
+      },
+      {
+        "language": "tsx",
+        "code": "const withIndex = rules.map((rule, index) => ({ rule, index }));\nconst ordered = [...withIndex].sort(bySpecificity);\n{ordered.map(({ rule, index }, position) => (\n  <RuleRow key={rule.id} rule={rule} position={position + 1} onChange={(patch) => update(index, patch)} />\n))}"
+      }
+    ]
   },
-  "uptime": 20261.1507859,
-  "optimizations": {
-    "cacheHitRate": 0.78,
-    "avgResponseTime": 45
-  },
-  "note": "Install Claude Code CLI for AI-powered optimization suggestions"
+  "rawOutputPreview": "## Performance Analysis — Canon\n\nThe codebase is mid-build (per `AGENTS.md`'s phased plan), so several categories are thin because the code doesn't exist yet (engine's blocking/detect/agent modules are `NotImplementedError` stubs for Phase 2/3). I've reported honestly where that's the case rather than inventing issues.\n\n### 1. N+1 queries\n\nNo N+1 loops exist — `web/lib/server/conflicts.ts`, `audit.ts`, `entities.ts` are already written as batched/grouped single queries. The actual problem is **missing indexes** to back those queries at scale (runs of thousands of entities, queues of hundreds of conflicts):\n\n```ts\n// web/lib/db/schema.ts:214 — conflicts has no index on run_id,\n// yet every queue/export read does WHERE conflicts.run_id = $1\nexport const conflicts = pgTable(\"conflicts\", { ... });\n\n// schema.ts:232 — resolutions has no index on conflict_id,\n// yet it's LEFT JOINed on resolutions.conflict_id = conflicts.id everywhere\nexport const resolutions = pgTable(\"resolutions\", { ... });\n```\n\nFix — add explicit indexes:\n```ts\nexport const conflicts = pgTable(\"conflicts\", {...}, (t) => [\n  index(\"conflicts_run_id_idx\").on(t.runId),\n]);\nexport const resolutions = pgTable(\"resolutions\", {...}, (t) => [\n  index(\"resolutions_conflict_id_idx\").on(t.conflictId),\n]);\n```\nSame gap on `matches` (no index on `runId`) and `auditLog` (no index on `runId`/`action`, and `listAuditForExport` in `audit.ts:140` is explicitly unpaged). Generate a migration with `npx drizzle-kit generate` once added.\n\n### 2. Unnecessary React re-renders\n\n`web/components/conflicts/conflict-focus.tsx:57` and `conflict-dense-table.tsx:65` render up to 100 unmemoized rows. `ConflictQueue`'s `move()` (`conflict-queue.tsx:65`) updates `selectedIndex` on every `j`/`k` keypress, re-rendering all rows even though only 2 actually change class:\n\n```tsx\n// conflict-focus.tsx:57 — not memoized\nfunction ListRow({ row, selected }: { row: ConflictRow; selected: boolean }) { ... }\n\n// fix:\nconst ListRow = React.memo(fu",
+  "rawOutputLength": 5025
 }

@@ -8,6 +8,7 @@ import { getRunDetail } from "@/lib/server/runs";
 import { formatCount, shortRunId } from "@/lib/format";
 import { isUuid } from "@/lib/uuid";
 import { auditActionSchema, type AuditAction } from "@/types/resolution";
+import { requireReviewer } from "@/lib/server/auth";
 
 /**
  * Wireframe 1n — the audit trail, append-only.
@@ -26,6 +27,8 @@ export default async function AuditPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requireReviewer();
+
   const params = await searchParams;
 
   const runId = firstUuid(params.runId);

@@ -13,8 +13,12 @@ The boundary is enforced by TABLE OWNERSHIP, not by network topology:
     runs          status updates only — never the source or ruleset columns
     audit_log     append-only, both layers
 
-    sources       WEB ONLY — the engine must NEVER write this
-    rulesets      WEB ONLY — the engine must NEVER write this
+    sources            WEB ONLY — the engine must NEVER write this
+    rulesets           WEB ONLY — the engine must NEVER write this
+    source_credentials WEB ONLY — read and decrypted in credentials.py; the one
+                       write the engine makes there is `last_verified_at`,
+                       which records a connection attempt rather than changing
+                       the credential
 
 Violating that split makes runs non-reproducible. Drizzle owns the schema;
 nothing here migrates it.
@@ -24,6 +28,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from pipeline.credentials import SealedCredentialRow
 from pipeline.schema import (
     AuditAction,
     CanonicalEntity,
@@ -50,6 +55,29 @@ def load_run_config(run_id: UUID) -> tuple[UUID, UUID, UUID]:
 def load_ruleset(ruleset_id: UUID) -> list[SurvivorshipRule]:
     """Read a versioned ruleset. Never mutate it — past runs must still reproduce."""
     raise NotImplementedError("Phase 1 — see AGENTS.md § How a Reconciliation Run Works")
+
+
+def load_source(source_id: UUID) -> tuple[str, dict[str, object]]:
+    """``source_id`` → (kind, config).
+
+    ``config`` is non-secret connection shape only — object names, table names,
+    filters. The credential half is read by ``credentials.load_credentials``,
+    which is the only module that holds key material.
+    """
+    raise NotImplementedError("Phase 1 — see AGENTS.md § How a Reconciliation Run Works")
+
+
+def load_credential_row(source_id: UUID) -> SealedCredentialRow | None:
+    """The encrypted credential for a source, still sealed.
+
+    Returns the ciphertext untouched. Decryption happens in
+    ``credentials.py``, which owns the key — keeping the read here and the
+    open there means this module never has to be audited for key handling.
+
+    ``None`` means nothing is stored, which is a normal state for a synthetic
+    source and an error for every other kind.
+    """
+    raise NotImplementedError("Phase 5 — see AGENTS.md § Feature List")
 
 
 # ── Writes (engine-owned tables) ─────────────────────────────────────────────

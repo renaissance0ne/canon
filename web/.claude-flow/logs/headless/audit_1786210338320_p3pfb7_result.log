@@ -1,0 +1,51 @@
+[2026-08-08T17:33:15.698Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Based on my analysis of the codebase, here's the security audit report:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"medium\",\n      \"file\": \"app/api/audit/export/route.ts\",\n      \"line\": 57,\n      \"description\": \"CSV injection vulnerability: The csvCell() function escapes quotes but does not handle formula injection. If audit detail fields contain values starting with =, +, @, or -, Excel/Sheets will interpret them as formulas. While audit data is server-controlled, any user-supplied note field could be exploited.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"app/api/sources/[sourceId]/credentials/route.ts\",\n      \"line\": 78,\n      \"description\": \"Information disclosure: Error message reveals source kind information ('This source is {kind}') which could be used for reconnaissance. Consider using generic error messages for failed kind verification.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"app/api/oauth/[kind]/authorize/route.ts\",\n      \"line\": 78,\n      \"description\": \"No input validation for field value character encoding. While length is checked and hostname validated for specific fields, other public values should have more explicit character set restrictions to prevent injection vectors.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"app/api/runs/route.ts\",\n      \"line\": 35,\n      \"description\": \"Missing rate limiting: No rate limiting on POST endpoints. Attackers could trigger resource-intensive run creation (pipeline invocation) rapidly, causing denial of service.\"\n    }\n  ],\n  \"riskScore\": 22,\n  \"recommendations\": [\n    \"Fix CSV injection in audit export: Add checks for formula prefixes (=, +, @, -) in the csvCell() function and prepend a space or quote to sanitize them\",\n    \"Implement rate limiting on API endpoints that trigger expensive operations (POST /api/runs, POST /api/sources, etc.) using Next.js middleware or a dedicated rate limiting library\",\n    \"Review information leakage in error messages - use generic messages for failed resource access/type verification while logging details server-side\",\n    \"Add input validation for non-hostname public fields in OAuth authorize flow to restrict to expected character sets and prevent unexpected encoding issues\",\n    \"Verify CSRF protection: Confirm that Next.js and Clerk middleware provide CSRF protection for state-changing operations (currently not visible in provided code)\",\n    \"Ensure all database credentials (DATABASE_URL, OAuth secrets, CANON_CREDENTIAL_KEY) are stored in a secrets manager rather than .env files in production\",\n    \"Add security headers: Implement CSP, X-Frame-Options, X-Content-Type-Options headers in middleware\",\n    \"Consider adding request signing to API responses to prevent tampering with exported data that leaves the system\"\n  ]\n}\n```\n\n**Summary:** The codebase demonstrates strong security fundamentals with server-side authentication, input validation via Zod schemas, proper encryption (AES-256-GCM) for stored credentials, and use of ORMs to prevent SQL injection. The main issues are the CSV injection vulnerability in audit exports and missing rate limiting. No hardcoded secrets were found, and the architecture properly separates concerns between web and engine layers.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "medium",
+        "file": "app/api/audit/export/route.ts",
+        "line": 57,
+        "description": "CSV injection vulnerability: The csvCell() function escapes quotes but does not handle formula injection. If audit detail fields contain values starting with =, +, @, or -, Excel/Sheets will interpret them as formulas. While audit data is server-controlled, any user-supplied note field could be exploited."
+      },
+      {
+        "severity": "low",
+        "file": "app/api/sources/[sourceId]/credentials/route.ts",
+        "line": 78,
+        "description": "Information disclosure: Error message reveals source kind information ('This source is {kind}') which could be used for reconnaissance. Consider using generic error messages for failed kind verification."
+      },
+      {
+        "severity": "low",
+        "file": "app/api/oauth/[kind]/authorize/route.ts",
+        "line": 78,
+        "description": "No input validation for field value character encoding. While length is checked and hostname validated for specific fields, other public values should have more explicit character set restrictions to prevent injection vectors."
+      },
+      {
+        "severity": "low",
+        "file": "app/api/runs/route.ts",
+        "line": 35,
+        "description": "Missing rate limiting: No rate limiting on POST endpoints. Attackers could trigger resource-intensive run creation (pipeline invocation) rapidly, causing denial of service."
+      }
+    ],
+    "riskScore": 22,
+    "recommendations": [
+      "Fix CSV injection in audit export: Add checks for formula prefixes (=, +, @, -) in the csvCell() function and prepend a space or quote to sanitize them",
+      "Implement rate limiting on API endpoints that trigger expensive operations (POST /api/runs, POST /api/sources, etc.) using Next.js middleware or a dedicated rate limiting library",
+      "Review information leakage in error messages - use generic messages for failed resource access/type verification while logging details server-side",
+      "Add input validation for non-hostname public fields in OAuth authorize flow to restrict to expected character sets and prevent unexpected encoding issues",
+      "Verify CSRF protection: Confirm that Next.js and Clerk middleware provide CSRF protection for state-changing operations (currently not visible in provided code)",
+      "Ensure all database credentials (DATABASE_URL, OAuth secrets, CANON_CREDENTIAL_KEY) are stored in a secrets manager rather than .env files in production",
+      "Add security headers: Implement CSP, X-Frame-Options, X-Content-Type-Options headers in middleware",
+      "Consider adding request signing to API responses to prevent tampering with exported data that leaves the system"
+    ]
+  },
+  "durationMs": 57378,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-08T17:33:15.698Z",
+  "executionId": "audit_1786210338320_p3pfb7"
+}

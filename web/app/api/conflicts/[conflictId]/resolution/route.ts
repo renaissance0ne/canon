@@ -1,5 +1,5 @@
 import { isUuid, notFound, parseJson } from "@/app/api/_lib/respond";
-import { requireReviewer } from "@/lib/server/auth";
+import { requireReviewerForApi } from "@/lib/server/auth";
 import { recordReview } from "@/lib/server/conflicts";
 import { reviewActionSchema } from "@/types/resolution";
 
@@ -28,7 +28,9 @@ export async function PATCH(
   const parsed = await parseJson(request, reviewActionSchema);
   if (!parsed.ok) return parsed.response;
 
-  const reviewer = await requireReviewer();
+  const gate = await requireReviewerForApi();
+  if (!gate.ok) return gate.response;
+  const reviewer = gate.reviewer;
   const result = await recordReview({
     conflictId,
     action: parsed.data,

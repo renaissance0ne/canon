@@ -1,5 +1,5 @@
 import { badRequest, isUuid, notFound } from "@/app/api/_lib/respond";
-import { requireReviewer } from "@/lib/server/auth";
+import { requireReviewerForApi } from "@/lib/server/auth";
 import {
   DEFAULT_EXPORT_SECTIONS,
   EXPORT_SECTIONS,
@@ -41,7 +41,9 @@ export async function GET(request: Request, ctx: RouteContext<"/api/runs/[runId]
   // Recorded in the file itself. An export that circulates without saying who
   // pulled it and when is the kind of artefact this whole system exists to
   // replace.
-  const reviewer = await requireReviewer();
+  const gate = await requireReviewerForApi();
+  if (!gate.ok) return gate.response;
+  const reviewer = gate.reviewer;
   const payload = await buildRunExport(run, reviewer.label, sections);
   const filename = `canon-run-${shortRunId(run.id).replace("·", "")}`;
 

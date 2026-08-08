@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/console/page-header";
 import { AddSourceForm } from "@/components/sources/add-source-form";
 import { sourceKindSchema, type SourceKind } from "@/types/source";
+import { requireReviewer } from "@/lib/server/auth";
 
 /**
  * Wireframe 1c. `?kind=synthetic` is how the empty state's second button lands
@@ -12,6 +13,8 @@ export default async function NewSourcePage({
 }: {
   searchParams: Promise<{ kind?: string }>;
 }) {
+  await requireReviewer();
+
   const { kind } = await searchParams;
   const parsed = sourceKindSchema.safeParse(kind);
   const defaultKind: SourceKind = parsed.success ? parsed.data : "salesforce";

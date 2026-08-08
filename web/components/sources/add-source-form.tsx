@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { postJson } from "@/lib/api-client";
+import { requiresCredentials } from "@/types/credentials";
 import {
   SOURCE_KIND_LABEL,
   SOURCE_KIND_SIDE,
@@ -24,9 +25,10 @@ const KINDS = sourceKindSchema.options;
  * A starting shape per kind, so the config field is never a blank box. These
  * are examples, not policy — every one of them is meant to be edited.
  *
- * Note what is absent: there is no host, no user, no token, no key. Connection
- * secrets are keyed by `kind` in the engine's environment and never travel
- * through this form or land in this column.
+ * Note what is absent: there is no host, no user, no token, no key. This form
+ * describes WHAT to read, not HOW to connect. Credentials are collected on the
+ * connect screen, encrypted, and stored in `source_credentials` — they never
+ * travel through this form or land in this column.
  */
 const CONFIG_TEMPLATE: Record<SourceKind, string> = {
   salesforce: `{
@@ -118,7 +120,13 @@ export function AddSourceForm({ defaultKind }: { defaultKind: SourceKind }) {
       return;
     }
 
-    router.push("/sources");
+    // Straight on to connecting. A source with no credential cannot be used in
+    // a run, so landing on the list with a row that reads "connect" and no
+    // explanation would make the next step something to go looking for.
+    // Synthetic is the exception — it has nothing to authenticate against.
+    router.push(
+      requiresCredentials(kind) ? `/sources/${result.data.source.id}/connect` : "/sources",
+    );
     router.refresh();
   }
 

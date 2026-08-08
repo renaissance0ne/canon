@@ -1,0 +1,63 @@
+[2026-08-08T12:37:41.226Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"medium\",\n      \"file\": \"app/api/audit/export/route.ts\",\n      \"line\": 64,\n      \"description\": \"CSV Injection vulnerability in csvCell() function. Values starting with =, +, @, or - are not escaped and can execute formulas in spreadsheet applications. The detail field contains user-controlled data from the audit trail.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"app/api/runs/[runId]/export/route.ts\",\n      \"line\": 0,\n      \"description\": \"CSV Injection vulnerability via decisionsToCsv() export. Decision values (proposedValue, chosenValue) are not protected against formula injection attacks. These fields can be Excel formula payloads.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"app/api/conflicts/route.ts\",\n      \"line\": 17,\n      \"description\": \"Information disclosure via validation error messages. parsed.error.issues[0]?.message exposes Zod validation details, revealing field names and validation logic to potential attackers. Should use generic error message.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"app/api/conflicts/[conflictId]/resolution/route.ts\",\n      \"line\": 0,\n      \"description\": \"No visible rate limiting on sensitive operations. PATCH endpoint that records reviewer decisions should have rate limiting to prevent brute force attacks or audit trail manipulation.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"app/api/runs/route.ts\",\n      \"line\": 0,\n      \"description\": \"No visible rate limiting on POST /api/runs. The run creation endpoint lacks rate limiting, allowing potential denial-of-service or resource exhaustion attacks.\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"lib/api-client.ts\",\n      \"line\": 35,\n      \"description\": \"No explicit error handling for malformed JSON responses. While catch() is present, the null coercion could mask data corruption or MITM attacks that partially corrupt responses.\"\n    }\n  ],\n  \"riskScore\": 38,\n  \"recommendations\": [\n    \"Implement CSV injection prevention: Escape formula starters (=, +, @, -) in csvCell() by prepending a single quote or tab before cells that might contain them. Example: if (value[0] === '=' || value[0] === '+') return `'${value}`\",\n    \"Add rate limiting middleware to all POST/PATCH handlers. Use packages like `@vercel/ratelimit` or similar to limit concurrent requests per IP/session, especially on /api/runs and /api/conflicts/:id/resolution\",\n    \"Replace exposed validation error messages with generic fallback. Change `parsed.error.issues[0]?.message ?? 'Invalid query.'` to `'Invalid query parameters.'` to avoid leaking schema information\",\n    \"Implement explicit CSRF protection: Verify that Next.js middleware includes CSRF token validation on state-changing operations, or add explicit verification\",\n    \"Add security headers at the middleware level: Content-Security-Policy, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Strict-Transport-Security for HTTPS\",\n    \"Verify dependencies for known vulnerabilities: Run `npm audit` regularly and keep packages updated, especially Drizzle ORM, Next.js, and Clerk\",\n    \"Add database query logging/monitoring to detect suspicious patterns in entity lookups or conflict queries\",\n    \"Ensure .env files containing DATABASE_URL are in .gitignore and never committed to version control\"\n  ]\n}\n```\n\n## Summary of Findings\n\n**Key Issues:**\n- **CSV Injection** is the most actionable vulnerability—exported data can contain spreadsheet formula payloads that execute when opened\n- **Rate limiting gaps** expose auth and data modification endpoints to brute force\n- **Error message leakage** reveals schema details to attackers\n\n**Strengths:**\n- Proper use of Zod validation on all inputs—prevents SQL injection\n- Centralized auth with `requireReviewerForApi()`—all routes protected\n- Secrets kept in environment variables, never hardcoded\n- Audit trail properly logged for compliance\n\nThe codebase follows solid patterns (ORM-based queries, server-side auth resolution, request validation). The main risks are operational (missing rate limits, formula injection in exports) rather than architectural.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "medium",
+        "file": "app/api/audit/export/route.ts",
+        "line": 64,
+        "description": "CSV Injection vulnerability in csvCell() function. Values starting with =, +, @, or - are not escaped and can execute formulas in spreadsheet applications. The detail field contains user-controlled data from the audit trail."
+      },
+      {
+        "severity": "medium",
+        "file": "app/api/runs/[runId]/export/route.ts",
+        "line": 0,
+        "description": "CSV Injection vulnerability via decisionsToCsv() export. Decision values (proposedValue, chosenValue) are not protected against formula injection attacks. These fields can be Excel formula payloads."
+      },
+      {
+        "severity": "low",
+        "file": "app/api/conflicts/route.ts",
+        "line": 17,
+        "description": "Information disclosure via validation error messages. parsed.error.issues[0]?.message exposes Zod validation details, revealing field names and validation logic to potential attackers. Should use generic error message."
+      },
+      {
+        "severity": "medium",
+        "file": "app/api/conflicts/[conflictId]/resolution/route.ts",
+        "line": 0,
+        "description": "No visible rate limiting on sensitive operations. PATCH endpoint that records reviewer decisions should have rate limiting to prevent brute force attacks or audit trail manipulation."
+      },
+      {
+        "severity": "low",
+        "file": "app/api/runs/route.ts",
+        "line": 0,
+        "description": "No visible rate limiting on POST /api/runs. The run creation endpoint lacks rate limiting, allowing potential denial-of-service or resource exhaustion attacks."
+      },
+      {
+        "severity": "low",
+        "file": "lib/api-client.ts",
+        "line": 35,
+        "description": "No explicit error handling for malformed JSON responses. While catch() is present, the null coercion could mask data corruption or MITM attacks that partially corrupt responses."
+      }
+    ],
+    "riskScore": 38,
+    "recommendations": [
+      "Implement CSV injection prevention: Escape formula starters (=, +, @, -) in csvCell() by prepending a single quote or tab before cells that might contain them. Example: if (value[0] === '=' || value[0] === '+') return `'${value}`",
+      "Add rate limiting middleware to all POST/PATCH handlers. Use packages like `@vercel/ratelimit` or similar to limit concurrent requests per IP/session, especially on /api/runs and /api/conflicts/:id/resolution",
+      "Replace exposed validation error messages with generic fallback. Change `parsed.error.issues[0]?.message ?? 'Invalid query.'` to `'Invalid query parameters.'` to avoid leaking schema information",
+      "Implement explicit CSRF protection: Verify that Next.js middleware includes CSRF token validation on state-changing operations, or add explicit verification",
+      "Add security headers at the middleware level: Content-Security-Policy, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Strict-Transport-Security for HTTPS",
+      "Verify dependencies for known vulnerabilities: Run `npm audit` regularly and keep packages updated, especially Drizzle ORM, Next.js, and Clerk",
+      "Add database query logging/monitoring to detect suspicious patterns in entity lookups or conflict queries",
+      "Ensure .env files containing DATABASE_URL are in .gitignore and never committed to version control"
+    ]
+  },
+  "durationMs": 53465,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-08T12:37:41.226Z",
+  "executionId": "audit_1786192607761_74a4vl"
+}

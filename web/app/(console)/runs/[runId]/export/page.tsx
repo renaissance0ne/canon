@@ -7,6 +7,7 @@ import { estimateExportBytes, getExportSizing } from "@/lib/server/export";
 import { getRunDetail } from "@/lib/server/runs";
 import { shortRunId } from "@/lib/format";
 import { isUuid } from "@/lib/uuid";
+import { requireReviewer } from "@/lib/server/auth";
 
 /**
  * Wireframe 1o — export, the end of the flow.
@@ -25,6 +26,8 @@ export default async function RunExportPage({
 }: {
   params: Promise<{ runId: string }>;
 }) {
+  await requireReviewer();
+
   const { runId } = await params;
   if (!isUuid(runId)) notFound();
 

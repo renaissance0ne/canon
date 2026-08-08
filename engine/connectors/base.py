@@ -23,8 +23,16 @@ RawRecord = Mapping[str, object]
 class Connector(Protocol):
     """Reads one configured source system.
 
-    Credentials come from the engine environment keyed by ``kind`` — never from
-    ``sources.config``, which holds non-secret connection shape only.
+    Credentials arrive as a decrypted ``SourceCredentials`` (see
+    ``engine/credentials.py``) — never from ``sources.config``, which holds
+    non-secret connection shape only, and no longer from the environment. The
+    per-integration env keys were removed when credentials became per-source:
+    a static ``SALESFORCE_PASSWORD`` cannot describe two orgs and cannot be
+    rotated without a deploy.
+
+    The synthetic connector is the one implementation that takes no credentials,
+    which is why they are a constructor argument rather than part of this
+    protocol — ``extract`` is the whole contract.
     """
 
     kind: SourceKind

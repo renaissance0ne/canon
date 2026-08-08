@@ -1,0 +1,43 @@
+[2026-08-08T17:11:08.078Z] RESULT
+============================================================
+{
+  "success": true,
+  "output": "Based on my analysis of the provided codebase, here's the security assessment:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"low\",\n      \"file\": \"app/api/oauth/[kind]/callback/route.ts\",\n      \"line\": 75,\n      \"description\": \"Error description from OAuth provider is truncated to 200 chars but could still leak provider-specific implementation details or hint at internal systems if an attacker controls the OAuth provider\"\n    },\n    {\n      \"severity\": \"low\",\n      \"file\": \"app/api/_lib/respond.ts\",\n      \"line\": 30,\n      \"description\": \"Field-level validation errors returned to client could enable field enumeration attacks (e.g., determining which fields exist by error responses), though this is mitigated by auth gates\"\n    }\n  ],\n  \"riskScore\": 15,\n  \"recommendations\": [\n    \"✓ All API endpoints properly validated with Zod schemas before database operations — SQL injection risk is minimal\",\n    \"✓ Strong authentication gates on every endpoint — all data access requires reviewer session\",\n    \"✓ Actor/reviewer extracted from session, never trusted from request body — audit trail integrity is maintained\",\n    \"✓ Secrets encrypted before storage and never returned to clients — credential handling is secure\",\n    \"✓ UUID validation on all ID parameters prevents enumeration\",\n    \"✓ CSV export properly escapes special characters to prevent injection\",\n    \"✓ OAuth flow correctly validates state, handles CSRF, and uses httpOnly cookies\",\n    \"✓ No hardcoded secrets, API keys, or credentials found in code\",\n    \"✓ XSS risks are minimal — data formatted through dedicated functions\",\n    \"Consider: Add rate limiting on auth-gated endpoints to prevent brute force on resource enumeration\",\n    \"Consider: Log all security-relevant events (auth failures, privilege escalations) beyond current audit trail\",\n    \"Consider: Add Content-Security-Policy headers to prevent injected scripts in OAuth callback pages\"\n  ]\n}\n```\n\n**Summary:** This codebase demonstrates strong security practices. The risk score is low (15/100). Key strengths include proper input validation, authentication gates on all endpoints, secure credential handling, and use of an ORM to prevent SQL injection. The two low-severity findings are about information disclosure that's already somewhat mitigated by authentication. No critical vulnerabilities were found.\n",
+  "parsedOutput": {
+    "vulnerabilities": [
+      {
+        "severity": "low",
+        "file": "app/api/oauth/[kind]/callback/route.ts",
+        "line": 75,
+        "description": "Error description from OAuth provider is truncated to 200 chars but could still leak provider-specific implementation details or hint at internal systems if an attacker controls the OAuth provider"
+      },
+      {
+        "severity": "low",
+        "file": "app/api/_lib/respond.ts",
+        "line": 30,
+        "description": "Field-level validation errors returned to client could enable field enumeration attacks (e.g., determining which fields exist by error responses), though this is mitigated by auth gates"
+      }
+    ],
+    "riskScore": 15,
+    "recommendations": [
+      "✓ All API endpoints properly validated with Zod schemas before database operations — SQL injection risk is minimal",
+      "✓ Strong authentication gates on every endpoint — all data access requires reviewer session",
+      "✓ Actor/reviewer extracted from session, never trusted from request body — audit trail integrity is maintained",
+      "✓ Secrets encrypted before storage and never returned to clients — credential handling is secure",
+      "✓ UUID validation on all ID parameters prevents enumeration",
+      "✓ CSV export properly escapes special characters to prevent injection",
+      "✓ OAuth flow correctly validates state, handles CSRF, and uses httpOnly cookies",
+      "✓ No hardcoded secrets, API keys, or credentials found in code",
+      "✓ XSS risks are minimal — data formatted through dedicated functions",
+      "Consider: Add rate limiting on auth-gated endpoints to prevent brute force on resource enumeration",
+      "Consider: Log all security-relevant events (auth failures, privilege escalations) beyond current audit trail",
+      "Consider: Add Content-Security-Policy headers to prevent injected scripts in OAuth callback pages"
+    ]
+  },
+  "durationMs": 46200,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-08-08T17:11:08.078Z",
+  "executionId": "audit_1786209021878_32l9tq"
+}

@@ -8,6 +8,7 @@ import { getRunDetail, getSeverityBreakdown } from "@/lib/server/runs";
 import { shortRunId } from "@/lib/format";
 import { isUuid } from "@/lib/uuid";
 import type { RunDetail } from "@/types/run";
+import { requireReviewer } from "@/lib/server/auth";
 
 /**
  * Wireframes 1f, 1g and 1h — the same route, three states.
@@ -22,6 +23,8 @@ export default async function RunPage({
 }: {
   params: Promise<{ runId: string }>;
 }) {
+  await requireReviewer();
+
   const { runId } = await params;
   if (!isUuid(runId)) notFound();
 

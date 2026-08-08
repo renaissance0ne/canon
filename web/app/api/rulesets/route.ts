@@ -1,4 +1,5 @@
 import { parseJson } from "@/app/api/_lib/respond";
+import { requireReviewerForApi } from "@/lib/server/auth";
 import { createRulesetVersion, listRulesets } from "@/lib/server/rulesets";
 import { createRulesetSchema } from "@/types/rules";
 
@@ -12,10 +13,15 @@ import { createRulesetSchema } from "@/types/rules";
  */
 
 export async function GET() {
+  const gate = await requireReviewerForApi();
+  if (!gate.ok) return gate.response;
   return Response.json({ rulesets: await listRulesets() });
 }
 
 export async function POST(request: Request) {
+  const gate = await requireReviewerForApi();
+  if (!gate.ok) return gate.response;
+
   const parsed = await parseJson(request, createRulesetSchema);
   if (!parsed.ok) return parsed.response;
 

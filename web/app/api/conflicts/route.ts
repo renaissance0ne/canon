@@ -1,4 +1,5 @@
 import { badRequest } from "@/app/api/_lib/respond";
+import { requireReviewerForApi } from "@/lib/server/auth";
 import { loadQueue } from "@/lib/server/conflicts";
 import { queueQuerySchema } from "@/types/queue";
 
@@ -15,6 +16,9 @@ import { queueQuerySchema } from "@/types/queue";
  * Same schema, same loader as the screen, so a filter cannot mean two things.
  */
 export async function GET(request: Request) {
+  const gate = await requireReviewerForApi();
+  if (!gate.ok) return gate.response;
+
   const params = Object.fromEntries(new URL(request.url).searchParams);
   const parsed = queueQuerySchema.safeParse(params);
 

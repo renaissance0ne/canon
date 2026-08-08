@@ -1,6 +1,6 @@
 import { badRequest, isUuid, notFound } from "@/app/api/_lib/respond";
 import { listAuditForExport } from "@/lib/server/audit";
-import { requireReviewer } from "@/lib/server/auth";
+import { requireReviewerForApi } from "@/lib/server/auth";
 import { getRunDetail } from "@/lib/server/runs";
 import { auditDetailLine, auditNote } from "@/lib/audit-detail";
 import { shortRunId } from "@/lib/format";
@@ -32,7 +32,8 @@ export async function GET(request: Request) {
 
   // Reading the trail is itself a thing a person did, so the file records who
   // pulled it — but it is a read, and reads do not append to an append-only log.
-  await requireReviewer();
+  const gate = await requireReviewerForApi();
+  if (!gate.ok) return gate.response;
 
   const entries = await listAuditForExport({
     runId,

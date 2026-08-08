@@ -15,6 +15,13 @@
       "when": 1785920749224,
       "tag": "0001_lock_down_data_api",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786193419089,
+      "tag": "0002_add_source_credentials",
+      "breakpoints": true
     }
   ]
 }
