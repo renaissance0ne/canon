@@ -102,7 +102,8 @@ cd engine && uv run python -m eval.harness --seed 42 --quick
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Drizzle schema + migrations | schema written, **not yet applied** |
-| 1 | Synthetic generator, synthetic connector | stubs |
+| 1 | Synthetic generator (`engine/eval/generate.py`) | built |
+| 1 | Synthetic connector | stub |
 | 2 | Normalize, block/match, detect, baselines | stubs |
 | 3 | Resolution agent | stubs; auto-apply gate constants set |
 | 4 | Console | landing, auth, `/get-started`, `/sources` built |
