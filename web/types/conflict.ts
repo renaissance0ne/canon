@@ -25,7 +25,23 @@ export const severitySchema = z.union([
   z.literal(4),
 ]);
 
-export const matchMethodSchema = z.enum(["exact_key", "embedding", "fuzzy", "agent"]);
+/**
+ * How a pair was found. `orphan` is the odd one out: it is not a matching
+ * technique but the absence of one. An entity present on only one side still
+ * needs a `matches` row, because `conflicts.matchId` is NOT NULL and the queue
+ * inner-joins through it — so the engine writes a self-referential row (both
+ * sides the same entity, confidence 0) and labels it honestly rather than
+ * borrowing `exact_key` and implying a pairing that does not exist.
+ *
+ * Mirrors engine/pipeline/schema.py::MatchMethod.
+ */
+export const matchMethodSchema = z.enum([
+  "exact_key",
+  "embedding",
+  "fuzzy",
+  "agent",
+  "orphan",
+]);
 
 export const matchSignalsSchema = z.object({
   exactKey: z.boolean(),

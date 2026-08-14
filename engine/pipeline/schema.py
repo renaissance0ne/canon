@@ -26,7 +26,14 @@ RunStatus = Literal[
     "queued", "extracting", "matching", "detecting", "resolving", "complete", "failed"
 ]
 ConflictClass = Literal["structural", "attribute", "cosmetic", "orphan", "duplicate"]
-MatchMethod = Literal["exact_key", "embedding", "fuzzy", "agent"]
+#: ``orphan`` is not a matching technique — it is the absence of one. An entity
+#: with no counterpart still needs a row in ``matches`` because ``conflicts``
+#: requires a match to point at and the console's queue inner-joins through it;
+#: that row is self-referential (both sides the same entity) with confidence 0.
+#: Naming the method honestly is what keeps a reader from mistaking a
+#: self-referential row for a real pairing.
+#: Mirrored in web/types/conflict.ts::matchMethodSchema.
+MatchMethod = Literal["exact_key", "embedding", "fuzzy", "agent", "orphan"]
 ResolutionStatus = Literal[
     "proposed", "auto_applied", "escalated", "approved", "rejected", "overridden"
 ]

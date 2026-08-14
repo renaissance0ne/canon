@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,16 @@ import { AUTO_APPLY_GATE } from "@/types/run";
 import { SOURCE_KIND_LABEL, SOURCE_KIND_SIDE, type Source } from "@/types/source";
 import type { Ruleset } from "@/types/rules";
 
-type Props = { sources: Source[]; rulesets: Ruleset[] };
+type Props = {
+  sources: Source[];
+  rulesets: Ruleset[];
+  /**
+   * Sources a run could read right now — synthetic ones, plus any real source
+   * whose credentials are stored. Passed in rather than derived here because
+   * only the server may look at `source_credentials`.
+   */
+  connectedIds: string[];
+};
 
 /**
  * Wireframe 1e — the only configuration decision a run takes.
@@ -21,17 +30,33 @@ type Props = { sources: Source[]; rulesets: Ruleset[] };
  * by the time a reviewer reaches the conflict queue they have already learned
  * which side is which.
  */
-export function NewRunForm({ sources, rulesets }: Props) {
+export function NewRunForm({ sources, rulesets, connectedIds }: Props) {
   const router = useRouter();
   const formId = useId();
 
+  const connected = useMemo(() => new Set(connectedIds), [connectedIds]);
+
+  // Runnable sources sort first, so the form opens on a combination that can
+  // actually start. Defaulting to an unconnected source means the first thing a
+  // reviewer does is click a button that fails.
+  const rank = useCallback(
+    (source: Source) => (connected.has(source.id) ? 0 : 1),
+    [connected],
+  );
+
   const crmCandidates = useMemo(
-    () => sources.filter((s) => SOURCE_KIND_SIDE[s.kind] !== "warehouse"),
-    [sources],
+    () =>
+      sources
+        .filter((s) => SOURCE_KIND_SIDE[s.kind] !== "warehouse")
+        .sort((a, b) => rank(a) - rank(b)),
+    [sources, rank],
   );
   const warehouseCandidates = useMemo(
-    () => sources.filter((s) => SOURCE_KIND_SIDE[s.kind] !== "crm"),
-    [sources],
+    () =>
+      sources
+        .filter((s) => SOURCE_KIND_SIDE[s.kind] !== "crm")
+        .sort((a, b) => rank(a) - rank(b)),
+    [sources, rank],
   );
 
   const [sourceAId, setSourceAId] = useState(crmCandidates[0]?.id ?? "");
@@ -49,7 +74,31 @@ export function NewRunForm({ sources, rulesets }: Props) {
   const rulesetFieldId = `${formId}-ruleset`;
 
   const sameSource = Boolean(sourceAId) && sourceAId === sourceBId;
-  const ready = Boolean(sourceAId && sourceBId && rulesetId) && !sameSource;
+
+  // Every reason a run cannot start, named. A disabled button with no
+  // explanation next to it is the thing this whole screen exists to avoid.
+  const unconnected = [sourceAId, sourceBId]
+    .filter((id) => id && !connected.has(id))
+    .map((id) => sources.find((s) => s.id === id))
+    .filter((s): s is Source => Boolean(s));
+
+  const onlyOneSynthetic =
+    sameSource && sources.filter((s) => s.kind === "synthetic").length === 1;
+
+  const blocked =
+    !sourceAId || !sourceBId || !rulesetId
+      ? "Choose a source for each side and a ruleset."
+      : sameSource
+        ? null // the dedicated note below already explains this one
+        : unconnected.length > 0
+          ? `${unconnected.map((s) => s.name).join(" and ")} ${
+              unconnected.length > 1 ? "have" : "has"
+            } no stored credentials. Connect ${
+              unconnected.length > 1 ? "them" : "it"
+            } first, or run against synthetic sources, which need none.`
+          : null;
+
+  const ready = Boolean(sourceAId && sourceBId && rulesetId) && !sameSource && !blocked;
 
   async function start() {
     setMessage(null);
@@ -89,6 +138,7 @@ export function NewRunForm({ sources, rulesets }: Props) {
               {crmCandidates.map((source) => (
                 <option key={source.id} value={source.id}>
                   {source.name} · {SOURCE_KIND_LABEL[source.kind]}
+                  {connected.has(source.id) ? "" : " · not connected"}
                 </option>
               ))}
             </Select>
@@ -106,6 +156,7 @@ export function NewRunForm({ sources, rulesets }: Props) {
               {warehouseCandidates.map((source) => (
                 <option key={source.id} value={source.id}>
                   {source.name} · {SOURCE_KIND_LABEL[source.kind]}
+                  {connected.has(source.id) ? "" : " · not connected"}
                 </option>
               ))}
             </Select>
@@ -117,7 +168,23 @@ export function NewRunForm({ sources, rulesets }: Props) {
         <p className="border-l-2 border-g-900 pl-3 text-body text-g-900">
           A and B are the same system. Reconciling a source against itself finds
           nothing — every entity matches itself and nothing ever disagrees.
+          {onlyOneSynthetic ? (
+            <>
+              {" "}
+              A synthetic reconciliation needs <strong>two</strong> synthetic
+              sources: the generated dataset holds both sides, and a run reads
+              side A from the first source and side B from the second.{" "}
+              <Link href="/sources/new?kind=synthetic" className="underline">
+                Add a second synthetic source
+              </Link>
+              .
+            </>
+          ) : null}
         </p>
+      ) : null}
+
+      {blocked ? (
+        <p className="border-l-2 border-g-900 pl-3 text-body text-g-900">{blocked}</p>
       ) : null}
 
       <Field

@@ -76,5 +76,7 @@ module = [
     "langgraph.*",
     "sentence_transformers.*",
     "simple_salesforce.*",
+    # Optional: only installed when a deployment reconciles Snowflake.
+    "snowflake.*",
 ]
 ignore_missing_imports = true

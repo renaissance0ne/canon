@@ -34,7 +34,7 @@ import binascii
 import hashlib
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Final
 from uuid import UUID
 
@@ -58,6 +58,20 @@ class CredentialKeyError(RuntimeError):
 
 class CredentialDecryptError(RuntimeError):
     """A ciphertext did not authenticate: wrong key, wrong row, or tampered."""
+
+
+#: Refresh a grant this close to expiry rather than at it. A run takes
+#: minutes, and a token valid when the run starts but not when the last
+#: extract finishes is the failure this margin exists to avoid.
+_EXPIRY_MARGIN: Final = timedelta(minutes=5)
+
+
+class CredentialsExpiredError(RuntimeError):
+    """An OAuth grant is past its expiry and the engine cannot renew it.
+
+    Separate from ``CredentialsMissingError`` because the fix is different:
+    missing means "never connected", expired means "connected, reconnect".
+    """
 
 
 class CredentialsMissingError(RuntimeError):
@@ -198,8 +212,40 @@ def load_credentials(source_id: UUID, kind: SourceKind) -> SourceCredentials:
 
     The result is held in memory for the length of a run and never written back,
     never logged, and never returned over the engine's HTTP surface.
+
+    The import of ``db`` is deferred to call time rather than made at module
+    scope: ``db`` imports the pipeline, the pipeline imports this module's
+    contract, and a top-level import here would close that circle. It also keeps
+    this module importable without a database, which is what lets the evaluation
+    harness construct a credential in memory.
     """
-    raise NotImplementedError("Phase 5 — see AGENTS.md § Feature List")
+    from db import load_credential_row
+
+    row = load_credential_row(source_id)
+
+    if row is None:
+        raise CredentialsMissingError(
+            f"Source {source_id} ({kind}) has no stored credentials. Connect it in "
+            f"the console before starting a run."
+        )
+
+    secrets = decrypt_secrets(
+        source_id=row.source_id,
+        ciphertext=row.ciphertext,
+        iv=row.iv,
+        auth_tag=row.auth_tag,
+        key_version=row.key_version,
+    )
+
+    return SourceCredentials(
+        source_id=row.source_id,
+        kind=kind,
+        method=row.method,
+        public_values=row.public_values,
+        secret_values=secrets,
+        expires_at=row.expires_at,
+        scope=row.scope,
+    )
 
 
 def mark_verified(source_id: UUID, at: datetime) -> None:
@@ -209,23 +255,63 @@ def mark_verified(source_id: UUID, at: datetime) -> None:
     not a change to the credential: it records that a connection attempt
     succeeded, which is what lets the console distinguish "configured" from
     "configured and known to work". Nothing else here writes.
+
+    Note the column list: ``last_verified_at`` and nothing else. Widening this
+    statement is how a web-owned table quietly becomes a shared one.
     """
-    raise NotImplementedError("Phase 5 — see AGENTS.md § Feature List")
+    from db import connect
+
+    with connect() as conn:
+        conn.execute(
+            "UPDATE source_credentials SET last_verified_at = %s WHERE source_id = %s",
+            (at, source_id),
+        )
 
 
 def refresh_oauth_token(credentials: SourceCredentials) -> SourceCredentials:
-    """Spend the refresh token for a new access token.
+    """Return a usable grant, or fail with something a person can act on.
 
     OAuth access tokens are short-lived by design, so a scheduled run will
-    routinely start with an expired one. This is the only place the engine talks
-    to a provider's token endpoint; the authorize half lives in the web layer,
-    which is the only side with a browser.
+    routinely start with an expired one.
 
-    The renewed grant is written back through the web layer's own encryption
-    path rather than sealed here — two implementations of the write side would
-    be two chances to write a credential in clear.
+    WHY THIS DOES NOT CALL A TOKEN ENDPOINT
+    A refresh needs the OAuth *app* registration — ``SALESFORCE_OAUTH_CLIENT_ID``
+    and its siblings — and AGENTS.md § Security Rules places those in
+    ``web/.env`` only, never the engine's. That is not an oversight to route
+    around: the authorize half of the flow is browser-driven and lives entirely
+    in the web layer, and giving the engine the client secret would put the
+    credential that mints grants next to the credentials it mints, in the one
+    process that also talks to third-party drivers.
+
+    So the engine's job here is to detect the condition and refuse early, at the
+    top of a run, with the source named. The alternative is a 401 from a
+    provider three stages in, after entities are already written, which reads
+    like a connector bug rather than an expired token.
+
+    Re-establishing the grant is the console's: ``/sources/:id/connect`` runs the
+    authorize flow and writes the new tokens through the web layer's own
+    encryption path. Two implementations of that write side would be two chances
+    to store a credential in clear.
     """
-    raise NotImplementedError("Phase 5 — see AGENTS.md § Feature List")
+    if credentials.method != "oauth2":
+        return credentials
+
+    expires_at = credentials.expires_at
+    if expires_at is None:
+        # No expiry recorded — a long-lived grant, or a provider that does not
+        # report one. Nothing to decide.
+        return credentials
+
+    if expires_at > datetime.now(UTC) + _EXPIRY_MARGIN:
+        return credentials
+
+    raise CredentialsExpiredError(
+        f"The OAuth grant for source {credentials.source_id} ({credentials.kind}) "
+        f"expired at {expires_at.isoformat()}. Reconnect it in the console — "
+        f"Sources → the source → Connect — which re-runs the authorize flow and "
+        f"stores a fresh token. The engine holds no OAuth client secret and "
+        f"cannot refresh the grant itself."
+    )
 
 
 def method_for(kind: SourceKind, method: AuthMethod) -> str:

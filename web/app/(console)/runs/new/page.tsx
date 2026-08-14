@@ -2,9 +2,10 @@ import Link from "next/link";
 import { PageHeader } from "@/components/console/page-header";
 import { NewRunForm } from "@/components/runs/new-run-form";
 import { Button } from "@/components/ui/button";
+import { findConfiguredSourceIds } from "@/lib/server/credentials";
 import { listRulesets } from "@/lib/server/rulesets";
 import { listSources } from "@/lib/server/sources";
-import { SOURCE_KIND_SIDE } from "@/types/source";
+import { SOURCE_KIND_SIDE, requiresCredentialsForKind } from "@/types/source";
 import { requireReviewer } from "@/lib/server/auth";
 
 /** Wireframe 1e. Server Component; the form below is the only client boundary. */
@@ -12,6 +13,17 @@ export default async function NewRunPage() {
   await requireReviewer();
 
   const [sources, rulesets] = await Promise.all([listSources(), listRulesets()]);
+
+  // Which sources could actually run today. The form needs this to explain a
+  // disabled button: "not connected" is the single most common reason a run
+  // cannot start, and discovering it only after clicking — as a server error —
+  // is the same silent-failure shape the run pipeline was just fixed for.
+  const configured = await findConfiguredSourceIds(
+    sources.filter((s) => requiresCredentialsForKind(s.kind)).map((s) => s.id),
+  );
+  const connectedIds = sources
+    .filter((s) => !requiresCredentialsForKind(s.kind) || configured.has(s.id))
+    .map((s) => s.id);
 
   const hasCrm = sources.some((s) => SOURCE_KIND_SIDE[s.kind] !== "warehouse");
   const hasWarehouse = sources.some((s) => SOURCE_KIND_SIDE[s.kind] !== "crm");
@@ -23,7 +35,11 @@ export default async function NewRunPage() {
 
       <div className="px-10 py-8">
         {canRun ? (
-          <NewRunForm sources={sources} rulesets={rulesets} />
+          <NewRunForm
+            sources={sources}
+            rulesets={rulesets}
+            connectedIds={connectedIds}
+          />
         ) : (
           <Prerequisites
             needsSources={!(hasCrm && hasWarehouse && sources.length >= 2)}

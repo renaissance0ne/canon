@@ -53,3 +53,21 @@ __pycache__/
 
 # generated synthetic datasets — reproducible from a seed, so never committed
 engine/data/
+
+# HubSpot config file
+hubspot.config.yml
+
+# Local agent tooling — machine state, never source.
+#
+# These are written by the claude-flow/ruflo background daemon: worker logs,
+# scheduler state, and metrics snapshots. They are per-machine and per-run, they
+# are not reproducible, and nothing in the project reads them.
+#
+# They are ignored for a stronger reason than noise. The daemon runs headless
+# model sessions and writes their transcripts here verbatim — including, on at
+# least one occasion, a live ANTHROPIC_API_KEY. A directory that can capture a
+# credential must never be a directory git is willing to track.
+.claude-flow/
+
+# Scaffolding from the HubSpot MCP, unrelated to Canon.
+web/canon/
