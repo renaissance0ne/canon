@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { RunDegradedNote } from "@/components/runs/run-degraded-note";
 import { RunTimeline } from "@/components/runs/run-timeline";
 import { SeverityHistogram } from "@/components/runs/severity-histogram";
 import { StatGrid } from "@/components/runs/stat-grid";
 import { formatCount, formatElapsed } from "@/lib/format";
 import type { SeverityBreakdown } from "@/types/conflict";
 import type { AuditEntry } from "@/types/resolution";
-import type { RunDetail } from "@/types/run";
+import { isRunDegraded, trustworthyEscalations, type RunDetail } from "@/types/run";
 
 /**
  * Wireframe 1g — severity is the handoff into review.
@@ -33,13 +34,21 @@ export function RunComplete({
     : null;
 
   const escalated = run.stats.escalated;
+  // The button promises work. When calls failed it must promise the work that
+  // actually exists, or it sends a reviewer at a queue mostly made of conflicts
+  // nobody ever got an answer for.
+  const degraded = isRunDegraded(run.stats);
+  const reviewable = degraded ? trustworthyEscalations(run.stats) : escalated;
 
   return (
     <div className="flex max-w-[640px] flex-col gap-7">
       <p className="font-mono text-value text-g-600">
         <span className="font-medium text-g-900">complete</span>
         {duration ? ` · ${duration}` : null}
+        {degraded ? <span className="text-g-900"> · degraded</span> : null}
       </p>
+
+      <RunDegradedNote run={run} />
 
       <StatGrid stats={run.stats} status={run.status} variant="summary" />
 
@@ -59,7 +68,8 @@ export function RunComplete({
               href={`/conflicts?runId=${run.id}&status=escalated`}
               className="no-underline"
             >
-              Review {formatCount(escalated)} escalated
+              Review {formatCount(reviewable)} escalated
+              {degraded ? ` · ${formatCount(escalated - reviewable)} unanswered` : null}
             </Link>
           </Button>
         ) : (

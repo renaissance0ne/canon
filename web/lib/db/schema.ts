@@ -12,7 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { CanonicalEntity } from "@/types/entity";
 import type { SurvivorshipRule } from "@/types/rules";
-import type { RunStats, RunStatus } from "@/types/run";
+import type { ModelProvider, RunStats, RunStatus } from "@/types/run";
 import type {
   ConflictClass,
   MatchMethod,
@@ -152,6 +152,20 @@ export const runs = pgTable("runs", {
   rulesetId: uuid("ruleset_id")
     .notNull()
     .references(() => rulesets.id),
+  /**
+   * Which model family resolved the conflicts the ruleset did not decide.
+   *
+   * On the run for the same reason `rulesetId` is: a number produced by Gemini
+   * and a number produced by Claude are only comparable if the row says which
+   * one answered. The engine reads this column and never falls back to the
+   * other provider — a run that asked for one and got the other would make
+   * every metric attributed to it wrong.
+   *
+   * Defaults to `claude` because that is what every run written before this
+   * column existed actually used. A default of `gemini` would backfill history
+   * with a claim that is not true.
+   */
+  modelProvider: text("model_provider").$type<ModelProvider>().notNull().default("claude"),
   status: text("status").$type<RunStatus>().notNull().default("queued"),
   stats: jsonb("stats").$type<RunStats>().notNull(),
   error: text("error"),

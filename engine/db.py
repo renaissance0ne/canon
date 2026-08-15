@@ -33,6 +33,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -47,6 +48,7 @@ from pipeline.schema import (
     CanonicalEntity,
     Conflict,
     Match,
+    ModelProvider,
     Resolution,
     RunStats,
     RunStatus,
@@ -61,6 +63,21 @@ _BATCH = 500
 
 class RunConfigError(RuntimeError):
     """A run row references configuration that is missing or unusable."""
+
+
+@dataclass(frozen=True)
+class RunConfig:
+    """Everything a run's own row says about what it is supposed to execute.
+
+    Not a Pydantic model: this never crosses the layer boundary. It is the
+    engine reading web-owned configuration out of Postgres, which is the one
+    direction the ownership split allows.
+    """
+
+    source_a_id: UUID
+    source_b_id: UUID
+    ruleset_id: UUID
+    model_provider: ModelProvider
 
 
 def _database_url() -> str:
@@ -97,22 +114,41 @@ def connect() -> Iterator[psycopg.Connection[Any]]:
 # ── Reads (web-owned config — read freely, write never) ──────────────────────
 
 
-def load_run_config(run_id: UUID) -> tuple[UUID, UUID, UUID]:
-    """``run_id`` → (source_a_id, source_b_id, ruleset_id).
+def load_run_config(run_id: UUID) -> RunConfig:
+    """``run_id`` → the two sources, the ruleset, and the model provider.
 
     Everything a run needs is read from Postgres, not from the request body:
     two sources of truth for what a run executed would break reproducibility.
+    That now includes which model family resolved it — a number produced by
+    Gemini and a number produced by Claude are only comparable if the row says
+    which one answered.
     """
     with connect() as conn:
         row = conn.execute(
-            "SELECT source_a_id, source_b_id, ruleset_id FROM runs WHERE id = %s",
+            """
+            SELECT source_a_id, source_b_id, ruleset_id, model_provider
+              FROM runs
+             WHERE id = %s
+            """,
             (run_id,),
         ).fetchone()
 
     if row is None:
         raise RunConfigError(f"No run {run_id}. The web layer creates the row before dispatching.")
 
-    return (row[0], row[1], row[2])
+    provider = row[3]
+    if provider not in ("claude", "gemini"):
+        raise RunConfigError(
+            f"Run {run_id} names model provider {provider!r}, which this engine cannot "
+            f"resolve with. The column is web-owned; see web/types/run.ts."
+        )
+
+    return RunConfig(
+        source_a_id=row[0],
+        source_b_id=row[1],
+        ruleset_id=row[2],
+        model_provider=provider,
+    )
 
 
 def load_ruleset(ruleset_id: UUID) -> list[SurvivorshipRule]:

@@ -4,6 +4,7 @@ import { formatCount } from "@/lib/format";
 import { SEVERITY_LABEL, SEVERITY_ORDER, type Severity } from "@/types/conflict";
 import {
   QUEUE_STATUS_LABEL,
+  QUEUE_STATUS_PURPOSE,
   QUEUE_VIEWS,
   queueStatusFilterSchema,
   type QueueCounts,
@@ -63,6 +64,7 @@ export function QueueFilters({
               key={status}
               href={href({ status, page: undefined })}
               aria-current={active ? "true" : undefined}
+              title={QUEUE_STATUS_PURPOSE[status]}
               className={cn(
                 "inline-flex h-7 items-center gap-1.5 rounded-[2px] border px-2 text-[11px] no-underline",
                 "font-sans transition-colors duration-[80ms] ease-canon",
@@ -119,6 +121,15 @@ export function QueueFilters({
           );
         })}
       </div>
+
+      {/* What the selected pile is for, in one line. `w-full` puts it on its own
+          row of the wrapping bar rather than needing a second container.
+
+          The auto-applied filter is the one that needs this: without it, 57
+          already-decided rows read as 57 things somebody still has to do. */}
+      <p className="w-full max-w-[620px] text-body text-g-500">
+        {QUEUE_STATUS_PURPOSE[query.status]}
+      </p>
     </div>
   );
 }

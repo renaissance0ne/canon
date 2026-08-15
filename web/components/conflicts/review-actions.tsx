@@ -12,12 +12,22 @@ import type { ReviewSubmit } from "@/components/conflicts/use-review";
 /**
  * Approve / override / reject (wireframes 1i, 1j, 1k, 1l).
  *
- * Two shapes, decided by whether anything was ever proposed:
+ * THREE shapes, and which one renders is decided by what the row still needs:
  *
- *   a value was proposed   Approve · Override… · Reject
- *   nothing was proposed   Take <source A> · Take <source B> · Reject
+ *   auto-applied           Applied · Override… · Reject   (quiet, no primary)
+ *   escalated, proposal    Approve · Override… · Reject
+ *   escalated, no proposal Take <source A> · Take <source B> · Override… · Reject
  *
- * The second shape is the honest reading of 1j's "Approve Salesforce". When a
+ * The auto-applied shape exists because that row is ALREADY DECIDED. It cleared
+ * both halves of the gate — severity ≤ 2 and confidence ≥ 0.85 — `validate`
+ * confirmed the value was one of the two observed, and it is in the audit trail.
+ * Offering "Approve" on it asks for a decision that has already been made and
+ * makes a spot-check pile look like a worklist. What must stay reachable is
+ * CORRECTION: a wrong auto-apply is the false-auto-apply rate, the metric that
+ * matters most operationally, and a human noticing one is the only thing that
+ * catches it. So the controls stay — they just stop pretending to be pending.
+ *
+ * The third shape is the honest reading of 1j's "Approve Salesforce". When a
  * rule said `escalate`, no value exists to approve — choosing a side is a human
  * picking a value the system declined to pick, which IS an override and is
  * recorded as one. Labelling it "approve" would put a decision in the audit trail
@@ -53,6 +63,8 @@ export function ReviewActions({
 
   const observed = observedValues(row);
   const hasProposal = resolution.proposedValue.length > 0;
+  // Already decided and written. Nothing is pending; only correction remains.
+  const applied = resolution.status === "auto_applied";
 
   async function run(action: Parameters<ReviewSubmit>[0]) {
     setError(null);
@@ -74,7 +86,14 @@ export function ReviewActions({
         />
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          {hasProposal ? (
+          {applied ? (
+            // A statement, not a control. The decision is done; this row is on
+            // screen so it can be checked, not so it can be actioned.
+            <span className="font-mono text-value text-g-600">
+              <span className="font-medium text-g-900">applied automatically</span>
+              {" · no action needed"}
+            </span>
+          ) : hasProposal ? (
             <Button size="sm" disabled={pending} onClick={() => run({ action: "approve" })}>
               Approve
             </Button>
@@ -97,13 +116,17 @@ export function ReviewActions({
             })
           )}
 
+          {/* On an applied row both of these are corrections, so neither may
+              carry weight — an outlined button next to "no action needed" is
+              still an invitation. On an escalated row Override is the second
+              real choice and keeps its outline. */}
           <Button
             size="sm"
-            variant="outline"
+            variant={applied ? "quiet" : "outline"}
             disabled={pending}
             onClick={() => onOverrideOpenChange(true)}
           >
-            Override…
+            {applied ? "Change…" : "Override…"}
           </Button>
 
           <Button
@@ -112,7 +135,7 @@ export function ReviewActions({
             disabled={pending}
             onClick={() => run({ action: "reject" })}
           >
-            Reject
+            {applied ? "Back out" : "Reject"}
           </Button>
 
           {/* Changing a decision is allowed and appends another audit row. Saying

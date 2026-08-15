@@ -42,13 +42,18 @@ def write_report(
     ablations: dict[str, Metrics],
     sweep: dict[float, Metrics],
     invented_values: int,
+    provider: str = "claude",
+    model: str = "",
     out_dir: Path = DEFAULT_OUT_DIR,
 ) -> Path:
     """The whole results chapter: tables, ablations, figures.
 
     The seed is written into the document rather than kept in a shell history.
     Reported numbers cite a seed, and a results file that does not name the one
-    it came from cannot be reproduced by the person reading it.
+    it came from cannot be reproduced by the person reading it. The same
+    argument applies to the model: ``canon_full`` is a different system under
+    Claude than under Gemini, and a results table that does not say which one
+    answered is not reproducible either.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -56,13 +61,15 @@ def write_report(
         "# Canon — evaluation results",
         "",
         f"Seed `{seed}` · dataset `{data_dir}`",
+        f"Resolution model `{model or provider}` (`{provider}`)",
         "",
         *_degradation_warning(runs),
         "Regenerate with:",
         "",
         "```bash",
         f"uv run python -m eval.generate --seed {seed} --accounts 500 --out {data_dir}",
-        f"uv run python -m eval.harness --seed {seed} --systems all --report",
+        f"uv run python -m eval.harness --seed {seed} --provider {provider} "
+        f"--systems all --report",
         "```",
         "",
         _results_markdown(runs),

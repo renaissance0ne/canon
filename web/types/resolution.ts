@@ -82,6 +82,11 @@ export const auditActionSchema = z.enum([
   "human_approved",
   "human_rejected",
   "human_overridden",
+  // `run_degraded` is the other action not in the original list, for the same
+  // reason: a run whose model calls failed COMPLETED — it is not `run_failed` —
+  // but its escalation count is not the agent's judgement. Without this the
+  // trail asserts a clean run.
+  "run_degraded",
   "run_failed",
 ]);
 
@@ -110,6 +115,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   human_approved: "approved",
   human_rejected: "rejected",
   human_overridden: "overridden",
+  run_degraded: "run degraded",
   run_failed: "run failed",
 };
 

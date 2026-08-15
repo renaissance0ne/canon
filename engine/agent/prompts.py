@@ -7,13 +7,93 @@ Anything that varies per conflict must come after it, or the cache never hits.
 
 from __future__ import annotations
 
-from pipeline.schema import Conflict, SurvivorshipRule, rule_specificity
+import os
+from copy import deepcopy
+from typing import Any
+
+from pipeline.schema import Conflict, ModelProvider, SurvivorshipRule, rule_specificity
 
 # AGENTS.md § Model Selection. Bulk scoring is high-volume and low-reasoning;
 # the resolution rationale is the reasoning that actually matters.
 MODEL_BULK = "claude-haiku-4-5"
 MODEL_RESOLUTION = "claude-sonnet-5"
 MODEL_ESCALATION_SUMMARY = "claude-sonnet-5"
+
+# The Gemini half of the same table. Flash rather than Pro for resolution: the
+# decision is a constrained choice between two supplied values under a quoted
+# rule, not open-ended reasoning.
+#
+# PINNED, not `gemini-flash-latest`. An alias that moves under a deployment
+# would change what a run executed without anything in this repository
+# changing, which is the same failure the versioned-ruleset rule exists to
+# prevent. The 2.5 line these were first written against is no longer served to
+# new API keys.
+#
+# 3.5 specifically, because the thinking control is model-dependent in a way
+# that is not obvious and was measured rather than assumed:
+#
+#   gemini-3.5-flash        accepts thinking_level AND thinking_budget; emits
+#                           no thought tokens at MINIMAL
+#   gemini-3.6-flash        accepts thinking_level; REJECTS thinking_budget=0
+#   gemini-3.7-flash        REJECTS thinking_level=MINIMAL; accepts
+#                           thinking_budget=0 but still bills ~165 thought
+#                           tokens per call regardless
+#
+# Only 3.5 gives a hidden scratchpad that is actually off, which is what makes
+# the cost column mean what it says. Overriding CANON_GEMINI_MODEL to 3.7 will
+# fail on the first call — see _gemini_config in agent/graph.py.
+# Resolution runs on FLASH-LITE, not Flash, and that is a deliberate departure
+# from the Claude column's "best model for the reasoning that matters".
+#
+# Measured, not assumed: on a free-tier key, Flash throttles at ~5 requests per
+# minute — a 208-conflict run spent four hours mostly asleep and escalated 117
+# conflicts that the agent was never successfully asked. Flash-Lite took 12
+# back-to-back calls in 10.2s with no throttling at all.
+#
+# A model that answers is worth more than a better model that gets rate-limited
+# into silence, and the task is narrow enough to survive the trade: pick one of
+# two supplied values under a quoted rule, or decline. Flash-Lite returns a
+# correct, contract-shaped rationale on it.
+#
+# On a paid tier, set CANON_GEMINI_MODEL=gemini-3.5-flash and the quality
+# argument goes back to the way AGENTS.md § Model Selection states it.
+MODEL_BULK_GEMINI = "gemini-3.5-flash-lite"
+MODEL_RESOLUTION_GEMINI = "gemini-3.5-flash-lite"
+#: Low-volume and read by a human, so it keeps the better model — the free-tier
+#: throughput argument above does not apply to one summary per escalation batch.
+MODEL_ESCALATION_SUMMARY_GEMINI = "gemini-3.5-flash"
+
+#: Resolution model per provider. One mapping rather than a branch at each call
+#: site, so adding a third provider is a row here and a Proposer subclass.
+RESOLUTION_MODEL: dict[ModelProvider, str] = {
+    "claude": MODEL_RESOLUTION,
+    "gemini": MODEL_RESOLUTION_GEMINI,
+}
+
+#: The environment variable each provider's client reads. Named here so
+#: ``/providers`` can report what this engine can actually call without holding
+#: a second, drifting copy of the list.
+API_KEY_ENV: dict[ModelProvider, str] = {
+    "claude": "ANTHROPIC_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+}
+
+#: Overrides the resolution model per provider without a code change — useful
+#: when a free-tier quota pushes a deployment onto a different Flash revision.
+MODEL_ENV: dict[ModelProvider, str] = {
+    "claude": "CANON_CLAUDE_MODEL",
+    "gemini": "CANON_GEMINI_MODEL",
+}
+
+
+def resolution_model(provider: ModelProvider) -> str:
+    """The resolution model this engine will use for a provider."""
+    return os.environ.get(MODEL_ENV[provider]) or RESOLUTION_MODEL[provider]
+
+
+def has_api_key(provider: ModelProvider) -> bool:
+    """Whether a key is present. Never returns, logs or compares the key itself."""
+    return bool(os.environ.get(API_KEY_ENV[provider]))
 
 #: The rationale is a product surface — a reviewer decides from it in five
 #: seconds. State which values disagreed, which rule or reasoning applied, and
@@ -61,6 +141,38 @@ SUBMIT_RESOLUTION_TOOL: dict[str, object] = {
         "required": ["proposed_value", "confidence", "rationale", "applied_rule_id"],
     },
 }
+
+#: The tool name both providers force. One constant because the reader that
+#: pulls the arguments back out matches on it.
+SUBMIT_RESOLUTION_NAME = "submit_resolution"
+
+
+def gemini_parameters_json_schema() -> dict[str, Any]:
+    """``SUBMIT_RESOLUTION_TOOL``'s schema, in the form Gemini accepts.
+
+    DERIVED, never restated. The tool contract is the one thing that must have a
+    single definition, and two hand-maintained copies of it would drift the first
+    time a field's description changed.
+
+    Exactly one rewrite is needed: ``{"type": ["string", "null"]}`` is valid JSON
+    Schema, but Gemini's ``parametersJsonSchema`` expresses a nullable field as
+    an ``anyOf`` union. Everything else passes through untouched.
+    """
+    schema = deepcopy(SUBMIT_RESOLUTION_TOOL["input_schema"])
+    assert isinstance(schema, dict)
+
+    properties = schema.get("properties")
+    if isinstance(properties, dict):
+        for name, prop in properties.items():
+            if not isinstance(prop, dict):
+                continue
+            declared = prop.get("type")
+            if isinstance(declared, list):
+                properties[name] = {
+                    key: value for key, value in prop.items() if key != "type"
+                } | {"anyOf": [{"type": member} for member in declared]}
+
+    return schema
 
 
 def build_ruleset_block(rules: list[SurvivorshipRule]) -> str:

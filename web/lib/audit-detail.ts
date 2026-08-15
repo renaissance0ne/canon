@@ -83,6 +83,19 @@ export function auditDetailParts(entry: AuditEntry): string[] {
   const tokens = num(detail, "tokensUsed");
   if (tokens !== null) parts.push(`${formatCount(tokens)} tokens`);
 
+  // Agent health, on `run_degraded`. The failure count leads: it is the number
+  // that says how much of `escalated` is not a judgement.
+  const modelErrors = num(detail, "modelErrors");
+  if (modelErrors !== null) parts.push(`${formatCount(modelErrors)} model calls failed`);
+
+  const throttled = num(detail, "modelRateLimited");
+  if (throttled !== null && throttled > 0) {
+    parts.push(`${formatCount(throttled)} throttled`);
+  }
+
+  const firstError = str(detail, "firstError");
+  if (firstError) parts.push(firstError);
+
   // Provenance. Which policy version, and which generated dataset.
   const version = num(detail, "rulesetVersion");
   if (version !== null) parts.push(`ruleset v${version}`);

@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/console/page-header";
 import { NewRunForm } from "@/components/runs/new-run-form";
 import { Button } from "@/components/ui/button";
 import { findConfiguredSourceIds } from "@/lib/server/credentials";
+import { fetchEngineProviders } from "@/lib/server/engine";
 import { listRulesets } from "@/lib/server/rulesets";
 import { listSources } from "@/lib/server/sources";
 import { SOURCE_KIND_SIDE, requiresCredentialsForKind } from "@/types/source";
@@ -12,7 +13,15 @@ import { requireReviewer } from "@/lib/server/auth";
 export default async function NewRunPage() {
   await requireReviewer();
 
-  const [sources, rulesets] = await Promise.all([listSources(), listRulesets()]);
+  // The provider probe is allowed to fail. It returns null rather than
+  // throwing, and the form then offers every provider unannotated — a console
+  // that will not render because a health check timed out is worse than one
+  // that lets the run start and reports honestly afterwards.
+  const [sources, rulesets, engineProviders] = await Promise.all([
+    listSources(),
+    listRulesets(),
+    fetchEngineProviders(),
+  ]);
 
   // Which sources could actually run today. The form needs this to explain a
   // disabled button: "not connected" is the single most common reason a run
@@ -39,6 +48,7 @@ export default async function NewRunPage() {
             sources={sources}
             rulesets={rulesets}
             connectedIds={connectedIds}
+            engineProviders={engineProviders}
           />
         ) : (
           <Prerequisites

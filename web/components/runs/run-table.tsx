@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatCount, formatElapsed, formatTimestamp, shortRunId } from "@/lib/format";
-import { isTerminalRunStatus, isStatKnown, type RunDetail } from "@/types/run";
+import {
+  MODEL_PROVIDER_LABEL,
+  isTerminalRunStatus,
+  isStatKnown,
+  type RunDetail,
+} from "@/types/run";
 
 /**
  * Data surface: opaque, square, hairlines only. 36px rows.
@@ -19,6 +24,7 @@ export function RunTable({ runs }: { runs: RunDetail[] }) {
           <Th>Status</Th>
           <Th>Sources</Th>
           <Th>Ruleset</Th>
+          <Th>Model</Th>
           <Th className="text-right">Conflicts</Th>
           <Th className="text-right">Escalated</Th>
           <Th>Started</Th>
@@ -53,6 +59,12 @@ export function RunTable({ runs }: { runs: RunDetail[] }) {
             </td>
             <td className="pr-4 font-mono text-value text-g-500">
               {run.rulesetName} v{run.rulesetVersion}
+            </td>
+            {/* Which model answered. Two runs' numbers are only comparable
+                when this column matches, so it sits beside the ruleset
+                version rather than being buried on the detail screen. */}
+            <td className="pr-4 font-mono text-value text-g-500">
+              {MODEL_PROVIDER_LABEL[run.modelProvider]}
             </td>
             <Num>{isStatKnown("conflicts", run.status) ? formatCount(run.stats.conflicts) : "—"}</Num>
             <Num emphasis>

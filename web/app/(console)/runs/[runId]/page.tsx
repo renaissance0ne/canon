@@ -7,7 +7,7 @@ import { listRunAudit } from "@/lib/server/audit";
 import { getRunDetail, getSeverityBreakdown } from "@/lib/server/runs";
 import { shortRunId } from "@/lib/format";
 import { isUuid } from "@/lib/uuid";
-import type { RunDetail } from "@/types/run";
+import { MODEL_PROVIDER_LABEL, type RunDetail } from "@/types/run";
 import { requireReviewer } from "@/lib/server/auth";
 
 /**
@@ -42,7 +42,14 @@ export default async function RunPage({
             </span>
           </>
         }
-        meta={`${run.sourceAName} ↔ ${run.sourceBName} · ${run.rulesetName} v${run.rulesetVersion}`}
+        // The model belongs next to the ruleset version: both are part of what
+        // this run executed, and a reader comparing two runs needs to see at a
+        // glance whether the same thing answered.
+        meta={
+          `${run.sourceAName} ↔ ${run.sourceBName} · ` +
+          `${run.rulesetName} v${run.rulesetVersion} · ` +
+          MODEL_PROVIDER_LABEL[run.modelProvider]
+        }
       />
 
       <div className="px-10 py-8">

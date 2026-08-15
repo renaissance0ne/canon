@@ -7,7 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Field, fieldAria } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { postJson } from "@/lib/api-client";
-import { AUTO_APPLY_GATE } from "@/types/run";
+import {
+  AUTO_APPLY_GATE,
+  MODEL_PROVIDERS,
+  MODEL_PROVIDER_LABEL,
+  type EngineProvider,
+  type ModelProvider,
+} from "@/types/run";
 import { SOURCE_KIND_LABEL, SOURCE_KIND_SIDE, type Source } from "@/types/source";
 import type { Ruleset } from "@/types/rules";
 
@@ -20,6 +26,12 @@ type Props = {
    * only the server may look at `source_credentials`.
    */
   connectedIds: string[];
+  /**
+   * What the engine reports it can call, or null when it could not be reached.
+   * Null means "offer everything unannotated" — a health probe that timed out
+   * is not evidence that a provider is unusable.
+   */
+  engineProviders: EngineProvider[] | null;
 };
 
 /**
@@ -30,11 +42,29 @@ type Props = {
  * by the time a reviewer reaches the conflict queue they have already learned
  * which side is which.
  */
-export function NewRunForm({ sources, rulesets, connectedIds }: Props) {
+export function NewRunForm({
+  sources,
+  rulesets,
+  connectedIds,
+  engineProviders,
+}: Props) {
   const router = useRouter();
   const formId = useId();
 
   const connected = useMemo(() => new Set(connectedIds), [connectedIds]);
+
+  // What the engine said about each provider, by name. Absent when the engine
+  // could not be reached — every lookup below treats that as "no opinion"
+  // rather than as "unconfigured".
+  const engineByProvider = useMemo(
+    () => new Map((engineProviders ?? []).map((p) => [p.provider, p])),
+    [engineProviders],
+  );
+
+  const isUsable = useCallback(
+    (provider: ModelProvider) => engineByProvider.get(provider)?.configured !== false,
+    [engineByProvider],
+  );
 
   // Runnable sources sort first, so the form opens on a combination that can
   // actually start. Defaulting to an unconnected source means the first thing a
@@ -66,12 +96,22 @@ export function NewRunForm({ sources, rulesets, connectedIds }: Props) {
   const [rulesetId, setRulesetId] = useState(
     (rulesets.find((r) => r.isActive) ?? rulesets[0])?.id ?? "",
   );
+  // Opens on a provider the engine actually has a key for. Defaulting to one
+  // it cannot call means the first thing a reviewer does is start a run that
+  // silently resolves nothing the ruleset did not already decide.
+  const [modelProvider, setModelProvider] = useState<ModelProvider>(
+    () => MODEL_PROVIDERS.find(isUsable) ?? MODEL_PROVIDERS[0],
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
   const aId = `${formId}-a`;
   const bId = `${formId}-b`;
   const rulesetFieldId = `${formId}-ruleset`;
+  const providerFieldId = `${formId}-provider`;
+
+  const chosenProvider = engineByProvider.get(modelProvider);
+  const providerUnconfigured = chosenProvider?.configured === false;
 
   const sameSource = Boolean(sourceAId) && sourceAId === sourceBId;
 
@@ -108,6 +148,7 @@ export function NewRunForm({ sources, rulesets, connectedIds }: Props) {
       sourceAId,
       sourceBId,
       rulesetId,
+      modelProvider,
     });
 
     if (!result.ok) {
@@ -206,6 +247,45 @@ export function NewRunForm({ sources, rulesets, connectedIds }: Props) {
           ))}
         </Select>
       </Field>
+
+      {/* The one model decision a run takes. Recorded on the run row, so two
+          runs are only comparable when this matches — which is why it is a
+          choice made before the run and not a setting changed after it. */}
+      <Field
+        label="Resolution model"
+        htmlFor={providerFieldId}
+        hint="Resolves the conflicts the ruleset does not decide. Recorded on the run."
+      >
+        <Select
+          {...fieldAria(providerFieldId, { hint: true })}
+          value={modelProvider}
+          onChange={(event) => setModelProvider(event.target.value as ModelProvider)}
+        >
+          {MODEL_PROVIDERS.map((provider) => (
+            <option key={provider} value={provider}>
+              {MODEL_PROVIDER_LABEL[provider]}
+              {engineByProvider.get(provider)?.model
+                ? ` · ${engineByProvider.get(provider)?.model}`
+                : ""}
+              {isUsable(provider) ? "" : " · no key configured"}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      {/* A warning, not a block. A run with no key still resolves everything
+          the ruleset decides and escalates the rest, which is a correct run —
+          the engine treats a missing key as degradation rather than failure,
+          and the console must not claim otherwise. */}
+      {providerUnconfigured ? (
+        <p className="border-l-2 border-g-900 pl-3 text-body text-g-900">
+          The engine has no API key for {MODEL_PROVIDER_LABEL[modelProvider]}, so
+          the agent will not run. Rules still resolve what they cover and
+          everything else escalates to review — the run is correct, just
+          smaller. Set the key in <span className="font-mono text-value">engine/.env</span> to
+          enable the agent.
+        </p>
+      ) : null}
 
       {/* Read-only, and it says so. The gate lives in engine/agent/graph.py as
           named constants because the evaluation sweeps them; a console that

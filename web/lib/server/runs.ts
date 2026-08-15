@@ -36,6 +36,7 @@ const detailColumns = {
   sourceAId: runs.sourceAId,
   sourceBId: runs.sourceBId,
   rulesetId: runs.rulesetId,
+  modelProvider: runs.modelProvider,
   status: runs.status,
   stats: runs.stats,
   error: runs.error,

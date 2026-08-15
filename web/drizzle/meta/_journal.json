@@ -22,6 +22,13 @@
       "when": 1786193419089,
       "tag": "0002_add_source_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786769921217,
+      "tag": "0003_add_model_provider",
+      "breakpoints": true
     }
   ]
 }

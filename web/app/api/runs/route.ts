@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const parsed = await parseJson(request, createRunSchema);
   if (!parsed.ok) return parsed.response;
 
-  const { sourceAId, sourceBId, rulesetId } = parsed.data;
+  const { sourceAId, sourceBId, rulesetId, modelProvider } = parsed.data;
 
   // Reconciling a source against itself would produce a perfect, meaningless
   // run: every entity matches itself and nothing ever disagrees.
@@ -81,6 +81,10 @@ export async function POST(request: Request) {
       rulesetId,
       rulesetName: ruleset.name,
       rulesetVersion: ruleset.version,
+      // What this run will resolve with. In the trail as well as on the row,
+      // because reading the audit log must not require joining back to a
+      // column a later migration could default away.
+      modelProvider,
     },
   });
 

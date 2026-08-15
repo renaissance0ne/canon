@@ -24,7 +24,14 @@ from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 
 import db
-from agent.graph import ClaudeProposer, resolve
+from agent.graph import (
+    ModelProposer,
+    ModelUsage,
+    build_proposer,
+    missing_key_message,
+    resolve,
+)
+from agent.prompts import API_KEY_ENV, has_api_key, resolution_model
 from connectors.base import Connector
 from connectors.factory import build_connector
 from credentials import (
@@ -41,6 +48,9 @@ from pipeline.schema import (
     AuditAction,
     CanonicalEntity,
     EntityType,
+    ModelProvider,
+    ProvidersResponse,
+    ProviderStatus,
     Resolution,
     RunStats,
     RunStatusResponse,
@@ -59,6 +69,9 @@ app = FastAPI(title="Canon reconciliation engine", version="0.1.0")
 #: Every entity type Canon reconciles, in a fixed order so two runs over one
 #: dataset produce rows in the same order and are diffable.
 ENTITY_TYPES: tuple[EntityType, ...] = ("account", "user", "role", "territory")
+
+#: Every model family a run may name, in the order the console offers them.
+MODEL_PROVIDERS: tuple[ModelProvider, ...] = ("claude", "gemini")
 
 #: Where generated datasets live for sources of kind ``synthetic``.
 #:
@@ -105,6 +118,28 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/providers", response_model=ProvidersResponse)
+async def providers() -> ProvidersResponse:
+    """Which model families this engine can actually call.
+
+    Read by the new-run screen so it can default to a provider that will work
+    and say plainly why the other one will not. It reports the PRESENCE of a
+    key, never the key — the same rule that governs `readStatus` for source
+    credentials. All model calls still happen here; the console learns only
+    whether one is possible.
+    """
+    return ProvidersResponse(
+        providers=[
+            ProviderStatus(
+                provider=provider,
+                model=resolution_model(provider),
+                configured=has_api_key(provider),
+            )
+            for provider in MODEL_PROVIDERS
+        ]
+    )
+
+
 def execute_run(run_id: UUID) -> RunStats:
     """extract → normalize → block/match → detect → resolve.
 
@@ -120,27 +155,36 @@ def execute_run(run_id: UUID) -> RunStats:
     stats = RunStats()
 
     try:
-        source_a_id, source_b_id, ruleset_id = db.load_run_config(run_id)
-        rules = db.load_ruleset(ruleset_id)
-        labels = (db.load_source_name(source_a_id), db.load_source_name(source_b_id))
+        config = db.load_run_config(run_id)
+        rules = db.load_ruleset(config.ruleset_id)
+        labels = (
+            db.load_source_name(config.source_a_id),
+            db.load_source_name(config.source_b_id),
+        )
+        provider = config.model_provider
 
         db.append_audit(
             run_id,
             "run_started",
             actor="engine",
             detail={
-                "sourceAId": str(source_a_id),
-                "sourceBId": str(source_b_id),
-                "rulesetId": str(ruleset_id),
+                "sourceAId": str(config.source_a_id),
+                "sourceBId": str(config.source_b_id),
+                "rulesetId": str(config.ruleset_id),
                 "rules": len(rules),
+                # Which model family answered is part of what this run executed.
+                # Reading it out of the audit trail must not require joining
+                # back to a row that a later migration could default away.
+                "modelProvider": provider,
+                "model": resolution_model(provider),
             },
         )
 
         # ── extract + normalize ──────────────────────────────────────────────
         db.update_run_status(run_id, "extracting", stats=stats)
 
-        side_a = _extract_side(source_a_id, side="a")
-        side_b = _extract_side(source_b_id, side="b")
+        side_a = _extract_side(config.source_a_id, side="a")
+        side_b = _extract_side(config.source_b_id, side="b")
 
         stats = stats.model_copy(
             update={"entities_a": len(side_a), "entities_b": len(side_b)}
@@ -194,7 +238,7 @@ def execute_run(run_id: UUID) -> RunStats:
         # ── resolve ──────────────────────────────────────────────────────────
         db.update_run_status(run_id, "resolving", stats=stats)
 
-        proposer = _build_proposer(rules)
+        proposer = _build_proposer(run_id, rules, provider)
         resolutions = resolve(
             detection.conflicts,
             rules,
@@ -206,15 +250,20 @@ def execute_run(run_id: UUID) -> RunStats:
 
         auto_applied = sum(1 for r in resolutions if r.status == "auto_applied")
         escalated = sum(1 for r in resolutions if r.status == "escalated")
+        usage = proposer.usage if proposer else None
         stats = stats.model_copy(
             update={
                 "auto_resolved": auto_applied,
                 "escalated": escalated,
-                "tokens_used": proposer.usage.total_tokens if proposer else 0,
+                "tokens_used": usage.total_tokens if usage else 0,
+                "model_calls": usage.calls if usage else 0,
+                "model_errors": usage.errors if usage else 0,
+                "model_rate_limited": usage.rate_limited if usage else 0,
             }
         )
 
         _audit_resolutions(run_id, resolutions)
+        _audit_degradation(run_id, provider, usage)
 
         db.update_run_status(run_id, "complete", stats=stats)
         return stats
@@ -280,16 +329,38 @@ def _build(
     )
 
 
-def _build_proposer(rules: list[SurvivorshipRule]) -> ClaudeProposer | None:
-    """The agent, when the engine has a key for it.
+def _build_proposer(
+    run_id: UUID, rules: list[SurvivorshipRule], provider: ModelProvider
+) -> ModelProposer | None:
+    """The agent for the provider this run named, when the engine has a key.
 
     ``None`` rather than a raise when no key is configured: the deterministic
     half of the pipeline is fully useful on its own, and a run that resolves
     what the rules decide and escalates the rest is a correct run. The absence
-    is recorded in the audit trail rather than inferred from the numbers.
+    is recorded in the audit trail rather than inferred from the numbers —
+    otherwise a run that degraded because a key expired is indistinguishable
+    from one that simply had no work for the agent.
+
+    It does NOT silently fall back to the other provider. A run that asked for
+    Gemini and got Claude would put a false statement on the row, and every
+    number produced under it would be attributed to the wrong model.
     """
-    proposer = ClaudeProposer(rules)
-    return proposer if proposer.available else None
+    proposer = build_proposer(rules, provider=provider)
+    if proposer.available:
+        return proposer
+
+    logger.warning("run %s: %s", run_id, missing_key_message(provider))
+    db.append_audit(
+        run_id,
+        "run_started",
+        actor="engine",
+        detail={
+            "modelProvider": provider,
+            "agentAvailable": False,
+            "reason": f"{API_KEY_ENV[provider]} is not set",
+        },
+    )
+    return None
 
 
 def _audit_resolutions(run_id: UUID, resolutions: list[Resolution]) -> None:
@@ -321,6 +392,45 @@ def _audit_resolutions(run_id: UUID, resolutions: list[Resolution]) -> None:
         )
 
     db.append_audit_many(run_id, entries)
+
+
+def _audit_degradation(
+    run_id: UUID, provider: ModelProvider, usage: ModelUsage | None
+) -> None:
+    """Record that this run's escalations are not all the agent's judgement.
+
+    Only when calls actually failed. A run whose agent answered everything it
+    was asked writes nothing here, so the presence of this entry is itself the
+    signal — a reader scanning the trail should not have to compare two numbers
+    to notice that a run was degraded.
+
+    The first error travels with it. "116 calls failed" is a symptom; whether
+    the cause was a quota, an expired key or an outage is what determines
+    whether re-running fixes anything.
+    """
+    if usage is None or usage.errors == 0:
+        return
+
+    logger.warning(
+        "run %s degraded: %d of %d model calls failed (provider=%s): %s",
+        run_id,
+        usage.errors,
+        usage.errors + usage.calls,
+        provider,
+        usage.first_error,
+    )
+    db.append_audit(
+        run_id,
+        "run_degraded",
+        actor="engine",
+        detail={
+            "modelProvider": provider,
+            "modelCalls": usage.calls,
+            "modelErrors": usage.errors,
+            "modelRateLimited": usage.rate_limited,
+            "firstError": usage.first_error,
+        },
+    )
 
 
 def _fail(run_id: UUID, stats: RunStats, error: Exception) -> None:

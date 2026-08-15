@@ -22,6 +22,11 @@ from pydantic.alias_generators import to_camel
 EntityType = Literal["account", "user", "role", "territory"]
 SourceKind = Literal["salesforce", "hubspot", "databricks", "snowflake", "synthetic"]
 RuleStrategy = Literal["prefer_source", "most_recent", "most_complete", "escalate"]
+#: Which model family the `propose` node calls. Recorded on the run row for the
+#: same reason `ruleset_id` is: two runs that disagree are only comparable if
+#: what produced each answer is on the record. Mirrored in
+#: web/types/run.ts::modelProviderSchema.
+ModelProvider = Literal["claude", "gemini"]
 RunStatus = Literal[
     "queued", "extracting", "matching", "detecting", "resolving", "complete", "failed"
 ]
@@ -42,6 +47,12 @@ ResolutionStatus = Literal[
 #: list — it has to exist, because a rejection recorded as any other action
 #: would put a false statement in the one table that is beyond dispute.
 #: Mirrored in web/types/resolution.ts::auditActionSchema.
+#: ``run_degraded`` is the second action not in AGENTS.md § Database Schema's
+#: original list, and it exists for the same reason ``human_rejected`` does: the
+#: system has a state it could not otherwise name truthfully. A run whose model
+#: calls failed COMPLETED — it is not ``run_failed`` — but its escalation count
+#: is not the agent's judgement. Recording that as anything else, or not at all,
+#: leaves the audit trail asserting a clean run.
 AuditAction = Literal[
     "run_started",
     "conflict_detected",
@@ -51,6 +62,7 @@ AuditAction = Literal[
     "human_approved",
     "human_rejected",
     "human_overridden",
+    "run_degraded",
     "run_failed",
 ]
 
@@ -194,6 +206,23 @@ class RunStats(CanonModel):
     escalated: int = 0
     tokens_used: int = 0
 
+    # ── Agent health ─────────────────────────────────────────────────────────
+    # A failed model call escalates. That is the correct behaviour, but it means
+    # `escalated` silently mixes two different facts: conflicts the agent judged
+    # genuinely ambiguous, and conflicts nobody ever got an answer for. Without
+    # these three, a run throttled into escalating most of its work is
+    # indistinguishable from a run that found that much real ambiguity — the
+    # eval harness has always said so loudly, and the console could not say it
+    # at all.
+    #: Model requests that returned an answer.
+    model_calls: int = 0
+    #: Requests that failed and escalated instead. Every one of these is an
+    #: escalation that is NOT a statement about the conflict.
+    model_errors: int = 0
+    #: Requests the provider throttled and that were retried. Cost wall-clock,
+    #: not correctness — a run can be slow and still be entirely trustworthy.
+    model_rate_limited: int = 0
+
 
 class StartRunRequest(CanonModel):
     """POST {ENGINE_URL}/runs.
@@ -218,3 +247,25 @@ class RunStatusResponse(CanonModel):
     status: RunStatus
     stats: RunStats
     error: str | None = None
+
+
+class ProviderStatus(CanonModel):
+    """One model provider, and whether this engine can actually call it.
+
+    ``configured`` reports the presence of a key, never the key. The console
+    reads this to default the run form to a provider that will work and to say
+    why the other one will not — the same reasoning that puts "not connected"
+    next to a source with no stored credentials.
+    """
+
+    provider: ModelProvider
+    #: The resolution model this engine would use. Named so the console shows
+    #: what a run will execute rather than a family label.
+    model: str
+    configured: bool
+
+
+class ProvidersResponse(CanonModel):
+    """GET {ENGINE_URL}/providers — read by the new-run screen."""
+
+    providers: list[ProviderStatus]

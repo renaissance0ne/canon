@@ -100,6 +100,22 @@ export const QUEUE_STATUS_LABEL: Record<QueueStatusFilter, string> = {
   all: "All",
 };
 
+/**
+ * What each pile is FOR. The two are not the same kind of work and reading them
+ * as one list is the most expensive mistake a reviewer can make here.
+ *
+ * `escalated` is the job: Canon declined to decide and a person must.
+ * `auto_applied` is already decided and recorded — it is on screen to be
+ * sampled, because a wrong auto-apply is the one error nothing else catches.
+ */
+export const QUEUE_STATUS_PURPOSE: Record<QueueStatusFilter, string> = {
+  escalated: "Canon would not decide these on its own. This is the work.",
+  auto_applied:
+    "Already decided and written to the audit trail — nothing here needs you. " +
+    "Shown so a wrong auto-apply can be spotted and corrected.",
+  all: "Every conflict this run detected, decided or not.",
+};
+
 /** Which resolution statuses each filter admits. `all` filters nothing. */
 export const QUEUE_STATUS_MATCHES: Record<
   QueueStatusFilter,

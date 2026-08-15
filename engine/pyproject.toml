@@ -26,9 +26,13 @@ dependencies = [
     "sentence-transformers>=5.6",
     "faiss-cpu>=1.15",
     "rapidfuzz>=3.14",
-    # Resolution agent
+    # Resolution agent. Both model SDKs are declared, not extras: which one a
+    # run uses is a per-run choice recorded on the row, so an engine that can
+    # only serve half the choices the console offers is a broken deployment
+    # rather than a lighter one.
     "langgraph>=1.2",
     "anthropic>=0.120",
+    "google-genai>=1.33",
     # Owned-table writes
     "psycopg[binary]>=3.3",
     # AES-256-GCM for stored source credentials. Already present transitively

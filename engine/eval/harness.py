@@ -24,20 +24,29 @@ from dotenv import load_dotenv
 
 from agent.graph import (
     AUTO_APPLY_MAX_SEVERITY,
-    ClaudeProposer,
+    ModelProposer,
     ModelUsage,
     Proposal,
     Proposer,
+    build_proposer,
+    missing_key_message,
     resolve,
 )
-from agent.prompts import MODEL_RESOLUTION
+from agent.prompts import resolution_model
 from connectors.synthetic import SyntheticConnector
 from eval.baselines import EVAL_RUN_ID, baseline_exact_detailed, baseline_rules_detailed
 from eval.generate import ENTITY_FILES, ESCALATE, ManifestEntry, load_manifest
 from pipeline.blocking import match
 from pipeline.detect import ConflictOrigin, Detection, detect_detailed
 from pipeline.normalize import entity_uuid, normalize
-from pipeline.schema import CanonicalEntity, Conflict, EntityType, Resolution, SurvivorshipRule
+from pipeline.schema import (
+    CanonicalEntity,
+    Conflict,
+    EntityType,
+    ModelProvider,
+    Resolution,
+    SurvivorshipRule,
+)
 
 System = Literal["baseline_exact", "baseline_rules", "canon_full"]
 
@@ -52,15 +61,40 @@ SOURCE_B = "warehouse"
 #: What the console would call these two sources.
 LABELS: tuple[str, str] = ("Salesforce (CRM)", "Databricks GTM")
 
-#: USD per million tokens for the resolution model, at list price. Sonnet 5 also
-#: has promotional pricing at the time of writing; the results table cites list
-#: so the number stays comparable after the promotion ends.
-USD_PER_MTOK_INPUT = 3.00
-USD_PER_MTOK_OUTPUT = 15.00
-#: Cache reads are ~0.1x input, writes ~1.25x. The ruleset block is the cache
-#: prefix, so on a run of any size almost all of its input is a cache read.
-USD_PER_MTOK_CACHE_READ = 0.30
-USD_PER_MTOK_CACHE_WRITE = 3.75
+@dataclass(frozen=True)
+class RateCard:
+    """USD per million tokens for one provider's resolution model, at list price.
+
+    List rather than promotional or free-tier: both providers discount, and a
+    cost column computed from a promotion is a number that stops being true
+    without anything in the repository changing. A reader can apply their own
+    discount to a list figure; they cannot recover list from a discounted one.
+    """
+
+    input: float
+    output: float
+    cache_read: float
+    cache_write: float
+
+
+#: The ruleset block is the cache prefix, so on a run of any size almost all of
+#: each call's input is a cache read — which is why the cache rates, not the
+#: input rate, dominate the cost column.
+RATE_CARDS: dict[ModelProvider, RateCard] = {
+    # claude-sonnet-5. Cache reads are ~0.1x input, writes ~1.25x.
+    "claude": RateCard(input=3.00, output=15.00, cache_read=0.30, cache_write=3.75),
+    # gemini-3.5-flash-lite, matching MODEL_RESOLUTION_GEMINI. Caching is
+    # implicit: cached input is billed at a fraction of input and there is no
+    # write charge, so `cache_write` is 0 rather than unset.
+    #
+    # CONFIRM THESE AGAINST CURRENT PRICING BEFORE PUBLISHING A COST COLUMN,
+    # and re-check them if CANON_GEMINI_MODEL moves off Flash-Lite — this card
+    # is per-PROVIDER, not per-model, so an override silently prices the run on
+    # the wrong tier. The Gemini Flash line reprices more often than Sonnet
+    # does, and a stale figure here is a wrong number in a results table rather
+    # than a stale comment.
+    "gemini": RateCard(input=0.10, output=0.40, cache_read=0.025, cache_write=0.00),
+}
 
 #: The policy the reported numbers were produced under.
 #:
@@ -149,6 +183,8 @@ class Metrics:
     false_auto_applies: int = 0
     model_calls: int = 0
     model_errors: int = 0
+    #: Throttled-and-retried requests. Cost wall-clock, not correctness.
+    model_rate_limited: int = 0
     first_error: str = ""
 
 
@@ -406,6 +442,7 @@ def score_run(
         false_auto_applies=false_auto_applies,
         model_calls=model_usage.calls,
         model_errors=model_usage.errors,
+        model_rate_limited=model_usage.rate_limited,
         first_error=model_usage.first_error,
     )
 
@@ -415,13 +452,16 @@ def _ratio(numerator: int, denominator: int) -> float:
 
 
 def _usd_per_1k(usage: ModelUsage, conflicts: int) -> float:
+    """Cost per 1,000 conflicts, on the rate card of whoever produced the tokens."""
     if conflicts == 0:
         return 0.0
+
+    rates = RATE_CARDS[usage.provider]
     usd = (
-        usage.input_tokens * USD_PER_MTOK_INPUT
-        + usage.output_tokens * USD_PER_MTOK_OUTPUT
-        + usage.cache_read_tokens * USD_PER_MTOK_CACHE_READ
-        + usage.cache_write_tokens * USD_PER_MTOK_CACHE_WRITE
+        usage.input_tokens * rates.input
+        + usage.output_tokens * rates.output
+        + usage.cache_read_tokens * rates.cache_read
+        + usage.cache_write_tokens * rates.cache_write
     ) / 1_000_000
     return usd / conflicts * 1000
 
@@ -528,9 +568,9 @@ def sweep_auto_apply_threshold(
 
 def main(argv: Sequence[str] | None = None) -> int:
     #: The harness is an entry point, so it owns this side effect exactly as
-    #: main.py does for the server. Without it ANTHROPIC_API_KEY stays unset and
-    #: `canon_full` silently degrades to the deterministic path — which looks
-    #: like a result rather than a misconfiguration.
+    #: main.py does for the server. Without it the provider's API key stays
+    #: unset and `canon_full` silently degrades to the deterministic path —
+    #: which looks like a result rather than a misconfiguration.
     load_dotenv()
 
     parser = argparse.ArgumentParser(
@@ -550,10 +590,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="cap model calls and skip ablations — for the post-change check",
     )
     parser.add_argument(
+        "--provider",
+        default="claude",
+        choices=("claude", "gemini"),
+        help="which model family resolves; reported alongside the numbers",
+    )
+    parser.add_argument(
         "--max-model-calls",
         type=int,
         default=None,
-        help="hard ceiling on Claude calls; beyond it conflicts escalate",
+        help="hard ceiling on model calls; beyond it conflicts escalate",
     )
     parser.add_argument(
         "--no-model",
@@ -581,22 +627,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.quick and max_calls is None:
         max_calls = 25
 
-    claude = None if args.no_model else ClaudeProposer(DEFAULT_RULESET, max_calls=max_calls)
-    proposer: Proposer | None = CachingProposer(claude) if claude and claude.available else None
+    provider: ModelProvider = args.provider
+    agent: ModelProposer | None = (
+        None
+        if args.no_model
+        else build_proposer(DEFAULT_RULESET, provider=provider, max_calls=max_calls)
+    )
+    proposer: Proposer | None = CachingProposer(agent) if agent and agent.available else None
 
-    if claude is not None and not claude.available and not args.no_model:
-        print("!  ANTHROPIC_API_KEY is not set — canon_full runs without a proposer.\n")
+    if agent is not None and not agent.available:
+        print(f"!  {missing_key_message(provider)}\n")
 
     print(f"dataset      {data_dir}")
     print(f"manifest     {len(manifest)} injected divergences")
-    print(f"resolution   {MODEL_RESOLUTION if proposer else '(no model)'}")
+    print(f"provider     {provider if proposer else '(no model)'}")
+    print(f"resolution   {resolution_model(provider) if proposer else '(no model)'}")
     if max_calls is not None:
         print(f"call ceiling {max_calls}")
     print()
 
     runs: dict[System, SystemRun] = {}
     for system in systems:
-        usage = claude.usage if (system == "canon_full" and claude) else None
+        usage = agent.usage if (system == "canon_full" and agent) else None
         runs[system] = execute(
             system,
             manifest,
@@ -616,7 +668,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         if proposer is not None:
             no_validate = ablate_without_validate(
-                manifest, data_dir, proposer=proposer, usage=claude.usage if claude else None
+                manifest, data_dir, proposer=proposer, usage=agent.usage if agent else None
             )
             ablations["no_validate"] = no_validate
             side_a, side_b = load_sides(data_dir)
@@ -646,6 +698,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             ablations=ablations,
             sweep=sweep,
             invented_values=invented,
+            provider=provider,
+            model=resolution_model(provider) if proposer else "(no model)",
         )
         print(f"wrote {out}")
 
@@ -683,6 +737,13 @@ def _print_metrics(label: str, metrics: Metrics) -> None:
         f"${metrics.usd_per_1k_conflicts:.2f}/1k conflicts, "
         f"{metrics.model_calls} calls"
     )
+    if metrics.model_rate_limited:
+        #: Not an error line. A throttled call that succeeded on retry produced
+        #: the agent's own answer; it just took longer to get it.
+        print(
+            f"  .  rate limited      {metrics.model_rate_limited} requests throttled "
+            f"and retried -- wall-clock only, the numbers above still stand"
+        )
     if metrics.model_errors:
         print(
             f"  !! model errors     {metrics.model_errors} calls failed and escalated "

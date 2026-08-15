@@ -1,7 +1,9 @@
 import "server-only";
 import {
+  engineProvidersSchema,
   engineRunStatusSchema,
   engineStartRunResponseSchema,
+  type EngineProvider,
   type EngineRunStatus,
 } from "@/types/run";
 
@@ -36,6 +38,8 @@ function engineUrl(): string {
 const DISPATCH_TIMEOUT_MS = 8_000;
 /** Status is polled, so a slow engine must not hold a request handler open. */
 const STATUS_TIMEOUT_MS = 4_000;
+/** Read once while rendering the new-run form. It must never stall the page. */
+const PROVIDERS_TIMEOUT_MS = 3_000;
 
 /**
  * POST {ENGINE_URL}/runs — hand the engine a run id and nothing else.
@@ -101,6 +105,33 @@ export async function fetchEngineStatus(runId: string): Promise<EngineRunStatus 
 
     const parsed = engineRunStatusSchema.safeParse(await response.json());
     return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET {ENGINE_URL}/providers — which model families the engine can call.
+ *
+ * Returns null when the engine cannot answer, exactly as `fetchEngineStatus`
+ * does. The run form then offers every provider unannotated rather than
+ * refusing to render: a console that hides a working option because a health
+ * probe timed out is worse than one that lets a run start and reports honestly
+ * if the key turns out to be missing.
+ *
+ * The response carries only which key NAMES are set, never a key — the same
+ * rule that governs every credential read path in this app.
+ */
+export async function fetchEngineProviders(): Promise<EngineProvider[] | null> {
+  try {
+    const response = await fetch(`${engineUrl()}/providers`, {
+      signal: AbortSignal.timeout(PROVIDERS_TIMEOUT_MS),
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+
+    const parsed = engineProvidersSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data.providers : null;
   } catch {
     return null;
   }

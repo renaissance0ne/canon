@@ -1,0 +1,1 @@
+ALTER TABLE "runs" ADD COLUMN "model_provider" text DEFAULT 'claude' NOT NULL;

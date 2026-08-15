@@ -216,17 +216,56 @@ canon/
 
 ### Model Selection
 
-| Step | Model | Why |
-|---|---|---|
-| Bulk candidate scoring | `claude-haiku-4-5` | High volume, low reasoning need |
-| Resolution proposal + rationale | `claude-sonnet-5` | This is the reasoning that matters |
-| Escalation summary | `claude-sonnet-5` | Human reads it; quality over cost |
+Canon resolves with **one of two model families**, chosen per run in the console
+and recorded on `runs.model_provider`. It is on the row for the same reason
+`rulesetId` is: a number produced by Gemini and a number produced by Claude are
+only comparable if the row says which one answered.
+
+| Step | Claude | Gemini | Why |
+|---|---|---|---|
+| Bulk candidate scoring | `claude-haiku-4-5` | `gemini-3.5-flash-lite` | High volume, low reasoning need |
+| Resolution proposal + rationale | `claude-sonnet-5` | `gemini-3.5-flash-lite` | See the throughput note below |
+| Escalation summary | `claude-sonnet-5` | `gemini-3.5-flash` | Human reads it; quality over cost |
+
+Model ids are **pinned, never aliased**. `gemini-flash-latest` would change what
+a run executed without anything in the repository changing — the same failure
+the versioned-ruleset rule exists to prevent.
+
+**Gemini resolution runs on Flash-Lite, and that is a deliberate departure from
+the Claude column's "best model for the reasoning that matters".** On a free-tier
+key, Flash throttles at ~5 requests per minute: a 208-conflict run took four
+hours and escalated 117 conflicts the agent was never successfully asked.
+Flash-Lite took 12 back-to-back calls in 10.2s untroubled. A model that answers
+beats a better model rate-limited into silence, and the task is narrow enough to
+survive the trade — pick one of two supplied values under a quoted rule, or
+decline. On a paid tier set `CANON_GEMINI_MODEL=gemini-3.5-flash` and the
+quality argument returns. If you do, re-check `RATE_CARDS` in
+`engine/eval/harness.py`: it is keyed by provider, not by model.
+
+Three rules hold across both providers, and `engine/agent/graph.py::ModelProposer`
+is where they live so the two cannot drift apart:
+
+1. **The model answers only through a forced tool call.** `tool_choice` on
+   Claude, `FunctionCallingConfigMode.ANY` on Gemini. A value recovered from
+   prose cannot be compared against the observed values exactly enough for
+   `validate` to mean anything.
+2. **Hidden reasoning is off.** `thinking: disabled` on Claude,
+   `thinking_level: MINIMAL` on Gemini. The reasoning that matters is the
+   rationale the reviewer reads, not a billed scratchpad. The Gemini control is
+   model-dependent — see the note on `MODEL_RESOLUTION_GEMINI`.
+3. **A run never falls back to the other provider.** A missing key degrades the
+   run to the deterministic path and records why; it does not silently swap the
+   model, which would attribute every metric to the wrong system.
 
 Enable **prompt caching** on the ruleset block — it is identical across every
-call in a run and is the single largest cost lever. Use the **Batch API** for
-`engine/eval/` sweeps, which are never latency-sensitive and cost half.
+call in a run and is the single largest cost lever. Claude caches it explicitly
+via `cache_control`; Gemini caches it implicitly by matching a stable prefix,
+which is earned by putting the ruleset in `system_instruction` and nothing
+per-conflict ahead of it. Use the **Batch API** for `engine/eval/` sweeps, which
+are never latency-sensitive and cost half.
 
-Never call the Anthropic API from `web/`. All model calls happen inside the engine.
+Never call a model API from `web/`. All model calls happen inside the engine;
+the console learns only *whether* a provider is callable, via `GET /providers`.
 
 ---
 
@@ -261,8 +300,12 @@ Implemented in `web/lib/db/schema.ts` (Drizzle). Generate and apply with
   sourceAId: uuid,              // FK sources.id — the CRM side
   sourceBId: uuid,              // FK sources.id — the warehouse side
   rulesetId: uuid,              // FK rulesets.id
+  modelProvider: text,          // "claude" | "gemini" — which model resolved this run
   status: text,                 // "queued" | "extracting" | "matching" | "detecting" | "resolving" | "complete" | "failed"
-  stats: jsonb,                 // { entitiesA, entitiesB, candidatePairs, matches, conflicts, autoResolved, escalated, tokensUsed }
+  stats: jsonb,                 // { entitiesA, entitiesB, candidatePairs, matches, conflicts, autoResolved,
+                                //   escalated, tokensUsed, modelCalls, modelErrors, modelRateLimited }
+                                // The last three are agent health: a failed model call escalates, so
+                                // `escalated` alone cannot be read as "conflicts needing judgement".
   error: text,                  // nullable
   startedAt: timestamptz,
   finishedAt: timestamptz,      // nullable
@@ -325,7 +368,9 @@ Implemented in `web/lib/db/schema.ts` (Drizzle). Generate and apply with
   id: uuid,
   runId: uuid,
   resolutionId: uuid,           // nullable
-  action: text,                 // "run_started" | "conflict_detected" | "resolution_proposed" | "auto_applied" | "escalated" | "human_approved" | "human_overridden" | "run_failed"
+  action: text,                 // "run_started" | "conflict_detected" | "resolution_proposed" | "auto_applied" | "escalated" | "human_approved" | "human_rejected" | "human_overridden" | "run_degraded" | "run_failed"
+                                // `run_degraded` names a run that COMPLETED but whose model calls failed —
+                                // it is not `run_failed`, and recording it as a clean run would be a lie.
   actor: text,                  // "engine" | "agent" | a reviewer identifier
   detail: jsonb,
   createdAt: timestamptz,
@@ -459,6 +504,25 @@ The engine reads everything else it needs (sources, ruleset) from Postgres using
 `runId`. Do not pass configuration over the wire — it creates two sources of
 truth for what a run actually executed, which breaks reproducibility.
 
+### GET {ENGINE_URL}/providers
+
+```ts
+{
+  providers: Array<{
+    provider: "claude" | "gemini";
+    model: string;      // the resolution model this engine would actually use
+    configured: boolean; // whether a key is PRESENT — never the key itself
+  }>;
+}
+```
+
+Read once while rendering the new-run screen, so the form can default to a
+provider that works and say plainly why the other will not. It reports the
+presence of a key and nothing more — the same rule that governs every
+credential read path. A provider with no key is a warning, not a block: the run
+still resolves whatever the ruleset decides and escalates the rest, which is a
+correct run.
+
 ### GET {ENGINE_URL}/runs/:runId/status
 
 ```ts
@@ -470,10 +534,18 @@ truth for what a run actually executed, which breaks reproducibility.
     candidatePairs: number; matches: number;
     conflicts: number; autoResolved: number; escalated: number;
     tokensUsed: number;
+    // Agent health. A failed model call escalates, so `escalated` mixes
+    // conflicts the agent judged ambiguous with conflicts it never answered.
+    modelCalls: number; modelErrors: number; modelRateLimited: number;
   };
   error: string | null;
 }
 ```
+
+`modelErrors > 0` means the run is **degraded**: it completed, but
+`escalated - modelErrors` is the only part of the queue that represents the
+agent's judgement. The console must say so rather than render a clean run —
+see `web/components/runs/run-degraded-note.tsx`.
 
 ---
 
@@ -1000,6 +1072,7 @@ Use TypeScript strictly across `web/`.
 | What | Where | Never |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Engine `.env` only | `web/`, any client bundle |
+| `GEMINI_API_KEY` | Engine `.env` only | `web/`, any client bundle |
 | `CANON_CREDENTIAL_KEY` | Engine `.env` + `web/.env`, identical value | Any client bundle, `sources.config` |
 | Source credentials (tokens, passwords, keys, OAuth grants) | `source_credentials`, encrypted | Engine `.env`, `sources.config`, any read path |
 | OAuth **app** registrations (`*_OAUTH_CLIENT_ID` / `_SECRET`) | `web/.env` only | Engine `.env`, public env |
@@ -1095,7 +1168,9 @@ uv run uvicorn main:app --reload --port 8000
 uv run python -m eval.generate --seed 42 --accounts 500 --out ./data/run42
 
 # Full evaluation sweep (all three systems, all metrics)
-uv run python -m eval.harness --seed 42 --systems all --report
+# --provider picks which model resolves; it is named in the results file,
+# because canon_full is a different system under each one.
+uv run python -m eval.harness --seed 42 --provider gemini --systems all --report
 
 # Web
 cd web

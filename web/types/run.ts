@@ -11,6 +11,29 @@ export const runStatusSchema = z.enum([
   "failed",
 ]);
 
+/**
+ * Which model family the `propose` node calls. Mirrors
+ * engine/pipeline/schema.py::ModelProvider.
+ *
+ * Recorded on the run row for the same reason `rulesetId` is: two runs that
+ * disagree are only comparable if what produced each answer is on the record.
+ * A run never falls back to the other provider — one that asked for Gemini and
+ * silently got Claude would put a false statement on the row.
+ */
+export const modelProviderSchema = z.enum(["claude", "gemini"]);
+
+export const MODEL_PROVIDER_LABEL: Record<ModelProvider, string> = {
+  claude: "Claude",
+  gemini: "Gemini",
+};
+
+/**
+ * The order the console offers them in. Not derived from the enum, so adding a
+ * provider is a deliberate decision about where it appears rather than a
+ * side effect of alphabetical order.
+ */
+export const MODEL_PROVIDERS = ["claude", "gemini"] as const satisfies readonly ModelProvider[];
+
 export const runStatsSchema = z.object({
   entitiesA: z.number().int().nonnegative(),
   entitiesB: z.number().int().nonnegative(),
@@ -20,6 +43,21 @@ export const runStatsSchema = z.object({
   autoResolved: z.number().int().nonnegative(),
   escalated: z.number().int().nonnegative(),
   tokensUsed: z.number().int().nonnegative(),
+
+  /**
+   * Agent health. A failed model call escalates — correct behaviour, but it
+   * means `escalated` mixes two different facts: conflicts the agent judged
+   * genuinely ambiguous, and conflicts nobody ever got an answer for.
+   *
+   * Defaulted, because runs written before these existed have no value for
+   * them and a missing count must not fail the parse. Zero is also the honest
+   * reading of an old row: nothing is known to have failed.
+   */
+  modelCalls: z.number().int().nonnegative().default(0),
+  /** Escalations that are NOT a statement about the conflict. */
+  modelErrors: z.number().int().nonnegative().default(0),
+  /** Throttled and retried. Cost wall-clock, not correctness. */
+  modelRateLimited: z.number().int().nonnegative().default(0),
 });
 
 export const createRunSchema = z.object({
@@ -28,10 +66,21 @@ export const createRunSchema = z.object({
   /** The warehouse side. */
   sourceBId: z.string().uuid(),
   rulesetId: z.string().uuid(),
+  /**
+   * Which model resolves the conflicts the ruleset does not decide. Defaulted
+   * rather than required so an existing caller keeps working and lands on the
+   * same provider every past run used — a default that changed the model would
+   * change results without changing a request.
+   */
+  modelProvider: modelProviderSchema.default("claude"),
 });
 
 export const runSchema = createRunSchema.extend({
   id: z.string().uuid(),
+  // Not optional on the way out. The column is NOT NULL with a default, so a
+  // row always has one, and a reader must never have to guess which model
+  // produced the numbers next to it.
+  modelProvider: modelProviderSchema,
   status: runStatusSchema,
   stats: runStatsSchema,
   error: z.string().nullable(),
@@ -71,12 +120,33 @@ export const engineRunStatusSchema = z.object({
   error: z.string().nullable(),
 });
 
+/**
+ * GET {ENGINE_URL}/providers — which model families the engine can call.
+ *
+ * `configured` is the PRESENCE of a key, never a key, not even masked. All
+ * model calls happen inside the engine; the console learns only whether one is
+ * possible, which is what lets the run form default to a provider that works
+ * and say plainly why the other does not.
+ */
+export const engineProviderSchema = z.object({
+  provider: modelProviderSchema,
+  /** The resolution model this engine would actually use. */
+  model: z.string(),
+  configured: z.boolean(),
+});
+
+export const engineProvidersSchema = z.object({
+  providers: z.array(engineProviderSchema),
+});
+
+export type ModelProvider = z.infer<typeof modelProviderSchema>;
 export type RunStatus = z.infer<typeof runStatusSchema>;
 export type RunStats = z.infer<typeof runStatsSchema>;
 export type CreateRun = z.infer<typeof createRunSchema>;
 export type Run = z.infer<typeof runSchema>;
 export type RunDetail = z.infer<typeof runDetailSchema>;
 export type EngineRunStatus = z.infer<typeof engineRunStatusSchema>;
+export type EngineProvider = z.infer<typeof engineProviderSchema>;
 
 /**
  * The pipeline, in order. This is the status bar in wireframes 1f and 1h: a run
@@ -123,6 +193,9 @@ export const STAT_PRODUCED_BY: Record<keyof RunStats, RunStage> = {
   autoResolved: "resolving",
   escalated: "resolving",
   tokensUsed: "resolving",
+  modelCalls: "resolving",
+  modelErrors: "resolving",
+  modelRateLimited: "resolving",
 };
 
 /** True once the producing stage is behind us, so the number means something. */
@@ -170,7 +243,28 @@ export const EMPTY_RUN_STATS: RunStats = {
   autoResolved: 0,
   escalated: 0,
   tokensUsed: 0,
+  modelCalls: 0,
+  modelErrors: 0,
+  modelRateLimited: 0,
 };
+
+/**
+ * A run completed, but some of its escalations are missing answers rather than
+ * carrying judgements. `escalated` cannot be read as "conflicts needing human
+ * judgement" while this is true, which is the whole reason the counts exist.
+ */
+export function isRunDegraded(stats: RunStats): boolean {
+  return stats.modelErrors > 0;
+}
+
+/**
+ * Escalations that ARE the agent's judgement — the rest were never answered.
+ * A floor at zero: the two numbers come from different counters and a
+ * pathological run must not render a negative queue size.
+ */
+export function trustworthyEscalations(stats: RunStats): number {
+  return Math.max(0, stats.escalated - stats.modelErrors);
+}
 
 /**
  * A READ-ONLY mirror of the auto-apply gate for display (wireframe 1e). The
