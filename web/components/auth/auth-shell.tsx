@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CanonLockup } from "@/components/canon-mark";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 /**
  * The frame around Clerk's sign-in and sign-up widgets.
@@ -18,10 +19,11 @@ export function AuthShell({
 }) {
   return (
     <div className="flex min-h-dvh flex-col bg-surface-sunken">
-      <div className="mx-auto w-full max-w-[1120px] px-8 py-8">
+      <div className="mx-auto flex w-full max-w-[1120px] items-center justify-between px-8 py-8">
         <Link href="/" className="no-underline">
           <CanonLockup size={18} />
         </Link>
+        <ThemeToggle />
       </div>
 
       <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col justify-center px-8 pb-24">

@@ -14,9 +14,12 @@ import { requireReviewer } from "@/lib/server/auth";
  * the page, readable, forever.
  */
 export default async function RulesPage() {
-  await requireReviewer();
+  const reviewer = await requireReviewer();
 
-  const [rulesets, sources] = await Promise.all([listRulesets(), listSources()]);
+  const [rulesets, sources] = await Promise.all([
+    listRulesets(reviewer.userId),
+    listSources(reviewer.userId),
+  ]);
   const active = rulesets.find((ruleset) => ruleset.isActive) ?? null;
   const history = rulesets.filter((ruleset) => ruleset.id !== active?.id);
 

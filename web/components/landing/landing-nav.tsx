@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { Show, UserButton } from "@clerk/nextjs";
+import { Show } from "@clerk/nextjs";
 import { CanonLockup } from "@/components/canon-mark";
 import { GradualBlur } from "@/components/visual/gradual-blur";
 import { Button } from "@/components/ui/button";
+import { ThemedUserButton } from "@/components/auth/themed-clerk";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 const LINKS = [
   { href: "#how", label: "How it works" },
@@ -34,6 +36,7 @@ export function LandingNav() {
         {/* The landing page is the only public route, so it is the one place
             that has to render both states. */}
         <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle className="mr-1" />
           <Show when="signed-out">
             <Button asChild variant="ghost" size="sm">
               <Link href="/sign-in" className="no-underline">
@@ -52,7 +55,7 @@ export function LandingNav() {
                 Open console
               </Link>
             </Button>
-            <UserButton />
+            <ThemedUserButton />
           </Show>
         </div>
       </div>

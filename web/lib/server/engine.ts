@@ -1,5 +1,14 @@
 import "server-only";
 import {
+  datasetDetailSchema,
+  datasetSummarySchema,
+  engineDatasetsSchema,
+  type DatasetDetail,
+  type DatasetSummary,
+  type EngineDatasets,
+  type GenerateDataset,
+} from "@/types/dataset";
+import {
   engineProvidersSchema,
   engineRunStatusSchema,
   engineStartRunResponseSchema,
@@ -40,6 +49,16 @@ const DISPATCH_TIMEOUT_MS = 8_000;
 const STATUS_TIMEOUT_MS = 4_000;
 /** Read once while rendering the new-run form. It must never stall the page. */
 const PROVIDERS_TIMEOUT_MS = 3_000;
+/** Listing reads meta.json and the manifest per dataset — disk, not network. */
+const DATASETS_TIMEOUT_MS = 5_000;
+/**
+ * Generation is synchronous and CPU-bound on the engine: ~0.1s at 500 accounts
+ * and ~8s at the 20,000 ceiling the schema allows. The timeout is sized for the
+ * ceiling with room to spare, because a request that gives up while the
+ * generator is still writing leaves a half-written dataset behind and tells the
+ * operator nothing about it.
+ */
+const GENERATE_TIMEOUT_MS = 60_000;
 
 /**
  * POST {ENGINE_URL}/runs — hand the engine a run id and nothing else.
@@ -65,7 +84,7 @@ export async function startRun(runId: string): Promise<void> {
     });
   } catch (cause) {
     throw new EngineUnreachableError(
-      `Engine did not accept the run: ${describe(cause)}`,
+      `Engine did not accept the run: ${describe(cause, DISPATCH_TIMEOUT_MS)}`,
       { cause },
     );
   }
@@ -137,10 +156,11 @@ export async function fetchEngineProviders(): Promise<EngineProvider[] | null> {
   }
 }
 
-function describe(cause: unknown): string {
+/** The timeout is passed in so the message names the one that actually elapsed. */
+function describe(cause: unknown, timeoutMs: number): string {
   if (cause instanceof Error) {
     return cause.name === "TimeoutError"
-      ? `no response within ${DISPATCH_TIMEOUT_MS / 1000}s`
+      ? `no response within ${timeoutMs / 1000}s`
       : cause.message;
   }
   return String(cause);
@@ -149,4 +169,141 @@ function describe(cause: unknown): string {
 async function readBody(response: Response): Promise<string> {
   const text = await response.text().catch(() => "");
   return text.slice(0, 300) || "(empty body)";
+}
+
+/**
+ * GET {ENGINE_URL}/datasets — the synthetic datasets on the engine's disk.
+ *
+ * Returns null when the engine cannot answer, the same as the other reads here.
+ * The dataset picker then falls back to a plain text field: a console that
+ * refuses to let you configure a source because a listing timed out is worse
+ * than one that lets you type the name you already know.
+ */
+export async function fetchEngineDatasets(): Promise<EngineDatasets | null> {
+  try {
+    const response = await fetch(`${engineUrl()}/datasets`, {
+      signal: AbortSignal.timeout(DATASETS_TIMEOUT_MS),
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+
+    const parsed = engineDatasetsSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET {ENGINE_URL}/datasets/:name — a dataset and a page of its manifest.
+ *
+ * Returns null when the engine cannot answer OR when it does not have that
+ * dataset. The screen says the same thing either way — there is nothing here to
+ * show — and distinguishing them would mean rendering a 404 differently from a
+ * timeout for no decision the reader could act on differently.
+ */
+export async function fetchEngineDataset(
+  name: string,
+  options: {
+    limit?: number;
+    offset?: number;
+    conflictClass?: string;
+    expected?: string;
+  } = {},
+): Promise<DatasetDetail | null> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value !== undefined && value !== "") query.set(key, String(value));
+  }
+
+  try {
+    const response = await fetch(
+      `${engineUrl()}/datasets/${encodeURIComponent(name)}?${query}`,
+      { signal: AbortSignal.timeout(DATASETS_TIMEOUT_MS), cache: "no-store" },
+    );
+    if (!response.ok) return null;
+
+    const parsed = datasetDetailSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A generation that the engine refused, with the reason it gave. */
+export type GenerateFailure = { ok: false; status: number; message: string };
+
+/**
+ * POST {ENGINE_URL}/datasets — generate a dataset from a seed and rates.
+ *
+ * The engine's own message is passed through rather than replaced. Its two
+ * refusals are both things the operator has to act on and neither is
+ * guessable from a status code alone: a name that is taken (409, and the fix
+ * is a different name or an explicit overwrite) and rates that cannot fit the
+ * population (400).
+ *
+ * Throws EngineUnreachableError when there was no answer at all, which is a
+ * different problem with a different fix and should not be rendered as a
+ * rejected request.
+ */
+export async function generateEngineDataset(
+  body: GenerateDataset,
+): Promise<{ ok: true; dataset: DatasetSummary } | GenerateFailure> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${engineUrl()}/datasets`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
+      cache: "no-store",
+    });
+  } catch (cause) {
+    throw new EngineUnreachableError(
+      `Engine did not generate the dataset: ${describe(cause, GENERATE_TIMEOUT_MS)}`,
+      { cause },
+    );
+  }
+
+  const payload: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    return { ok: false, status: response.status, message: detail(payload, response.status) };
+  }
+
+  const parsed = datasetSummarySchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new EngineUnreachableError(
+      "Engine generated the dataset but returned an unexpected body — check the tool contract in AGENTS.md.",
+    );
+  }
+
+  return { ok: true, dataset: parsed.data };
+}
+
+/**
+ * FastAPI puts the message in `detail` — a string for a raised HTTPException,
+ * a list of issues when its own validation rejected the body. Both are read,
+ * because the second is what a contract drift between the two schemas looks
+ * like and a bare "422" would say nothing about which field.
+ */
+function detail(payload: unknown, status: number): string {
+  const body = payload as { detail?: unknown } | null;
+
+  if (typeof body?.detail === "string" && body.detail) return body.detail;
+
+  if (Array.isArray(body?.detail)) {
+    const issues = body.detail
+      .map((issue) => {
+        const { loc, msg } = (issue ?? {}) as { loc?: unknown[]; msg?: unknown };
+        const field = Array.isArray(loc) ? loc.slice(1).join(".") : "";
+        return [field, msg].filter((part) => typeof part === "string" && part).join(": ");
+      })
+      .filter(Boolean);
+
+    if (issues.length > 0) return `Engine rejected the request — ${issues.join("; ")}`;
+  }
+
+  return `Engine rejected the request (${status}).`;
 }

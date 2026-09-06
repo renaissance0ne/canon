@@ -8,9 +8,9 @@ import { requireReviewer } from "@/lib/server/auth";
 
 /** The console's home. A run is the unit of work, so this is the unit of history. */
 export default async function RunsPage() {
-  await requireReviewer();
+  const reviewer = await requireReviewer();
 
-  const runs = await listRuns();
+  const runs = await listRuns(reviewer.userId);
 
   return (
     <>

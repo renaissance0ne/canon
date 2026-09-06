@@ -15,7 +15,7 @@ import { createRulesetSchema } from "@/types/rules";
 export async function GET() {
   const gate = await requireReviewerForApi();
   if (!gate.ok) return gate.response;
-  return Response.json({ rulesets: await listRulesets() });
+  return Response.json({ rulesets: await listRulesets(gate.reviewer.userId) });
 }
 
 export async function POST(request: Request) {
@@ -25,6 +25,8 @@ export async function POST(request: Request) {
   const parsed = await parseJson(request, createRulesetSchema);
   if (!parsed.ok) return parsed.response;
 
-  const ruleset = await createRulesetVersion(parsed.data);
+  // Versions are numbered per owner and per name, so "Save as v4" means v4 of
+  // THIS account's policy — not the fourth save anyone has ever made.
+  const ruleset = await createRulesetVersion(parsed.data, gate.reviewer.userId);
   return Response.json({ ruleset }, { status: 201 });
 }

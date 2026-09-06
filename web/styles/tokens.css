@@ -21,6 +21,11 @@
   --color-hairline-strong: var(--color-g-300);
   --color-ink:             var(--color-g-950);
 
+  /* The pool the spotlight card lifts toward. A token rather than --g-0
+     directly, because "lift" means toward white in light and toward the top of
+     the ramp in dark, and those are not the same step. */
+  --color-spotlight:       var(--color-g-0);
+
   --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
 
@@ -52,6 +57,65 @@
   --radius-control: 2px;
 
   --ease-canon: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+/* ── Dark ─────────────────────────────────────────────────────────────────
+   Not an inversion. A straight negative of the light ramp puts the raised
+   surface UNDER the page — --g-0 would become the darkest value while --g-50,
+   the "sunken" ground, sat above it — and every card in the console would read
+   as a hole. So the dark ramp is re-cut against the same semantics the names
+   already carry: --g-0 is the paper, --g-50 is the one step that goes beneath
+   it, and --g-100 upward climb toward --ink exactly as they do in light.
+
+   The steps are placed to hold the light theme's contrast relationships, not
+   its numbers: --g-500 (the most-used label gray) lands at 6.7:1 on the sunken
+   ground where light gets 4.9:1, --g-400 stays below AA because AGENTS.md
+   reserves it for decorative marks and disabled states, and --g-200 sits 1.32:1
+   off the ground so a hairline is a hairline and not a rule.
+
+   Only the twelve steps are redeclared. Everything derived from them —
+   --surface, --hairline, --ink, the glass veils, the spotlight pool — is a
+   var() reference and follows on its own.
+
+   There is no prefers-color-scheme fallback here on purpose: the pre-hydration
+   script in app/layout.tsx resolves the preference (including "system") and
+   writes data-theme before first paint, so the attribute is the single source
+   of truth for what theme a page is in. Two sources would disagree the moment
+   someone picked light on a dark machine.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-g-0:   #131316;  /* paper — raised surfaces, cards, inputs */
+  --color-g-50:  #0B0B0D;  /* sunken — the page behind them */
+  --color-g-100: #1C1C20;
+  --color-g-200: #27272B;  /* hairline */
+  --color-g-300: #37373D;  /* hairline-strong */
+  --color-g-400: #5E5E68;  /* decorative marks + disabled only, never body */
+  --color-g-500: #8E8E99;
+  --color-g-600: #ABABB5;
+  --color-g-700: #C6C6CE;
+  --color-g-800: #DEDEE3;
+  --color-g-900: #E8E8EC;  /* text-primary */
+  --color-g-950: #F7F7F8;  /* ink */
+
+  /* --g-0 is the card itself in dark, so lifting toward it is lifting toward
+     nothing. The pool climbs the ramp instead. */
+  --color-spotlight: var(--color-g-300);
+}
+
+/* The switch itself is not a transition. Colours are load-bearing here — a
+   hairline crossfading through mid-gray reads as a rendering fault, not as
+   motion — so every transition is suppressed for the frame the attribute
+   flips in. See components/theme/theme-provider.tsx. */
+:root[data-theme-switching] *,
+:root[data-theme-switching] *::before,
+:root[data-theme-switching] *::after {
+  transition: none !important;
 }
 
 @layer base {
@@ -189,7 +253,7 @@
 @utility spotlight-pool {
   background: radial-gradient(
     circle var(--spotlight-radius, 260px) at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
-    color-mix(in oklab, var(--color-g-0) 92%, transparent),
+    color-mix(in oklab, var(--color-spotlight) 92%, transparent),
     transparent 70%
   );
 }

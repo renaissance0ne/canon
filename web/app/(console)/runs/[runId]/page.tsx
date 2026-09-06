@@ -23,12 +23,15 @@ export default async function RunPage({
 }: {
   params: Promise<{ runId: string }>;
 }) {
-  await requireReviewer();
+  const reviewer = await requireReviewer();
 
   const { runId } = await params;
   if (!isUuid(runId)) notFound();
 
-  const run = await getRunDetail(runId);
+  // A run belonging to another account 404s exactly as a run that never
+  // existed. Everything below reads engine-owned tables by `run.id` and is
+  // scoped by this one check.
+  const run = await getRunDetail(runId, reviewer.userId);
   if (!run) notFound();
 
   return (

@@ -32,11 +32,14 @@ export default async function ConflictsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireReviewer();
+  const reviewer = await requireReviewer();
 
   const params = await searchParams;
   const query = parseQuery(params);
-  const load = await loadQueue(query);
+  // A `?runId=` naming someone else's run reads as "no runs", not as a 403:
+  // the queue is scoped to this account, and a run outside it does not exist
+  // from here.
+  const load = await loadQueue(query, reviewer.userId);
 
   if (load.state === "no-runs") {
     return (

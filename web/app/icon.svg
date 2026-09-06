@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="8 4 56 56" width="64" height="64">
+  <!--
+    The Canon mark, framed for a 16px tab: a muzzle read as a C with the ball
+    clearing it. Same geometry as components/canon-mark.tsx at its small-size
+    weights (stroke 9, ball r 6.5), the point below which nothing in it holds.
+
+    The viewBox is offset rather than 0 0 64 64 because the artwork's bounding
+    box is not centred in that square (the ball pushes it right), so a naive
+    square would render the mark off-centre and undersized in the tab.
+
+    Two rules govern the colour, and both are about failing safe. A favicon is
+    parsed as standalone XML by an image decoder, not by the page, so:
+
+    1. The hex is written as a PRESENTATION ATTRIBUTE first and only restated
+       in CSS for the dark case. If a decoder ignores the style block the mark
+       still renders in light form. It must never be expressed only in CSS, and
+       never through a custom property: an unresolved var() on `stroke` falls
+       back to `none`, which does not degrade the mark, it deletes the arc and
+       leaves a lone dot in the tab.
+    2. No double hyphen anywhere in this comment. XML forbids it inside a
+       comment, and one occurrence makes the whole file unparseable, at which
+       point the browser silently keeps whatever icon it had cached before.
+
+    Achromatic like the rest of Canon. These are the only literal hexes in the
+    project because browser chrome sits outside the app and cannot read
+    styles/tokens.css; the values are the g-950 and g-50 tokens.
+  -->
+  <style>
+    @media (prefers-color-scheme: dark) {
+      .arc  { stroke: #FAFAFA; }
+      .ball { fill:   #FAFAFA; }
+    }
+  </style>
+  <path
+    class="arc"
+    d="M46.4 23A17 17 0 1 0 46.4 41"
+    fill="none"
+    stroke="#09090B"
+    stroke-width="9"
+    stroke-linecap="round"
+  />
+  <circle class="ball" cx="56" cy="32" r="6.5" fill="#09090B" />
+</svg>

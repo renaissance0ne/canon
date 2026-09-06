@@ -19,7 +19,7 @@ import { createRunSchema } from "@/types/run";
 export async function GET() {
   const gate = await requireReviewerForApi();
   if (!gate.ok) return gate.response;
-  return Response.json({ runs: await listRuns() });
+  return Response.json({ runs: await listRuns(gate.reviewer.userId) });
 }
 
 export async function POST(request: Request) {
@@ -30,6 +30,12 @@ export async function POST(request: Request) {
   if (!parsed.ok) return parsed.response;
 
   const { sourceAId, sourceBId, rulesetId, modelProvider } = parsed.data;
+
+  // Who started this. `actor` and `ownerId` are both resolved from the session,
+  // never from the request body — an audit trail whose actor is whatever the
+  // client sent is not an audit trail, and a run whose owner is whatever the
+  // client sent is not a boundary.
+  const reviewer = gate.reviewer;
 
   // Reconciling a source against itself would produce a perfect, meaningless
   // run: every entity matches itself and nothing ever disagrees.
@@ -43,10 +49,17 @@ export async function POST(request: Request) {
   //
   // Loaded in full rather than existence-checked, because the credential gate
   // below needs each source's kind and name to say anything useful.
+  //
+  // These three scoped reads are ALSO the ownership check on the run itself.
+  // The foreign keys on `runs` will happily accept another account's sourceId
+  // — they constrain existence, not ownership — so a run built from ids the
+  // client supplied is only this account's run because each id was resolved
+  // here, against this account. "No longer exists" is the honest answer for a
+  // source belonging to someone else: from here, it does not.
   const [sourceA, sourceB, ruleset] = await Promise.all([
-    getSource(sourceAId),
-    getSource(sourceBId),
-    getRuleset(rulesetId),
+    getSource(sourceAId, reviewer.userId),
+    getSource(sourceBId, reviewer.userId),
+    getRuleset(rulesetId, reviewer.userId),
   ]);
   if (!sourceA) return badRequest("Source A no longer exists.");
   if (!sourceB) return badRequest("Source B no longer exists.");
@@ -56,7 +69,7 @@ export async function POST(request: Request) {
   // Salesforce burns the whole pipeline and leaves a failed row to explain.
   // Checking here makes it a 400 on the button press instead — and names the
   // source, so the fix is one click away rather than a hunt.
-  const unconnected = await credentialsMissingFor([sourceA, sourceB]);
+  const unconnected = await credentialsMissingFor([sourceA, sourceB], reviewer.userId);
   if (unconnected.length > 0) {
     return badRequest(
       `${unconnected.join(" and ")} ${unconnected.length === 1 ? "has" : "have"} no stored ` +
@@ -64,12 +77,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // Who started this. `actor` is resolved from the session, never from the
-  // request body — an audit trail whose actor is whatever the client sent is
-  // not an audit trail. The gate at the top of the handler already resolved it.
-  const reviewer = gate.reviewer;
-
-  const run = await createRun(parsed.data);
+  const run = await createRun(parsed.data, reviewer.userId);
 
   await appendAudit({
     runId: run.id,

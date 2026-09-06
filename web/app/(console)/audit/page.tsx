@@ -19,15 +19,17 @@ import { requireReviewer } from "@/lib/server/auth";
  * ledger, why the export sits next to it, and why there is not one control here
  * that changes a row.
  *
- * Scoped to a run when asked (`?runId=`), otherwise the whole install newest
- * first.
+ * Scoped to a run when asked (`?runId=`), otherwise every run THIS ACCOUNT has
+ * started, newest first. Never the whole install: the trail answers "who
+ * approved this?" about your own org, and one account's reviewers are not the
+ * next account's business.
  */
 export default async function AuditPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireReviewer();
+  const reviewer = await requireReviewer();
 
   const params = await searchParams;
 
@@ -36,8 +38,8 @@ export default async function AuditPage({
   const page = firstPage(params.page);
 
   const [run, audit] = await Promise.all([
-    runId ? getRunDetail(runId) : Promise.resolve(null),
-    getAuditPage({ runId, action, page }),
+    runId ? getRunDetail(runId, reviewer.userId) : Promise.resolve(null),
+    getAuditPage({ ownerId: reviewer.userId, runId, action, page }),
   ]);
 
   const exportParams = new URLSearchParams();

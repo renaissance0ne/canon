@@ -12,7 +12,11 @@ import { Button } from "@/components/ui/button";
  * motion components and the sign-out control.
  */
 export default async function GetStartedPage() {
-  const [counts, reviewer] = await Promise.all([countSourcesBySide(), requireReviewer()]);
+  // The reviewer is resolved first because the count is scoped to them: this
+  // screen asks "have YOU configured anything yet", and a count of every
+  // account's sources would send a brand-new user straight past setup.
+  const reviewer = await requireReviewer();
+  const counts = await countSourcesBySide(reviewer.userId);
   const configured = counts.crm + counts.warehouse + counts.synthetic > 0;
 
   return (

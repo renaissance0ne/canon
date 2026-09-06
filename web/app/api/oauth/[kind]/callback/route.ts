@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { requireReviewer } from "@/lib/server/auth";
 import { CredentialKeyError } from "@/lib/server/crypto";
 import { storeCredentials } from "@/lib/server/credentials";
+import { getSource } from "@/lib/server/sources";
 import {
   exchangeCode,
   OAuthConfigError,
@@ -67,6 +68,14 @@ export async function GET(request: Request, ctx: RouteContext<"/api/oauth/[kind]
   if (!code) {
     return back(`/sources/${pending.sourceId}/connect`, "The provider returned no authorization code.");
   }
+
+  // `pending.sourceId` came out of the sealed state cookie, and /authorize only
+  // ever writes one for a source it resolved against this same account — so
+  // this check should never fire. It is here because a stored OAuth grant is
+  // the single most consequential row Canon writes, and the cost of confirming
+  // ownership once more before minting one is a single indexed read.
+  const source = await getSource(pending.sourceId, reviewer.userId);
+  if (!source) return back("/sources", "No such source.");
 
   try {
     const grant = await exchangeCode(pending, code, request.url);

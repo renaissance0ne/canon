@@ -39,21 +39,51 @@ import type { AuthMethod } from "@/types/credentials";
  *   conflicts   engine only                 (web must never write)
  *   resolutions engine proposes, web records human review
  *   audit_log   both, append-only           (never updated, never deleted)
+ *
+ * A SECOND split runs across the first: OWNERSHIP. Canon is single-tenant per
+ * account — a reviewer sees the sources they configured, the policy they
+ * authored and the runs they started, and nothing else. Only the three
+ * web-owned root tables carry `owner_id`:
+ *
+ *   sources     owner_id
+ *   rulesets    owner_id
+ *   runs        owner_id
+ *
+ * Everything else reaches its owner through one of those: entities, matches,
+ * conflicts and audit_log by `run_id`, resolutions by `conflict_id` → `run_id`,
+ * source_credentials by `source_id`. Recording it once per row rather than
+ * copying it down means the two can never disagree, and a scoped read is
+ * always a join back to a table that already knows.
+ *
+ * None of the columns has a database default. An insert that forgets to stamp
+ * an owner must fail rather than quietly create a row nobody can see — and,
+ * worse, that a `WHERE owner_id = ...` on the wrong sentinel could hand to
+ * someone else.
  */
 
 /** A configured system Canon reads from. Non-secret connection shape only. */
-export const sources = pgTable("sources", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  kind: text("kind").$type<SourceKind>().notNull(),
-  /**
-   * NEVER credentials. Object names, table names, filters — nothing else.
-   * Secrets live one table down in `source_credentials`, encrypted, and there
-   * is no field here a password could travel in even by accident.
-   */
-  config: jsonb("config").$type<SourceConfig>().notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const sources = pgTable(
+  "sources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /**
+     * The Clerk user this row belongs to. See the ownership note at the top of
+     * this file.
+     */
+    ownerId: text("owner_id").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind").$type<SourceKind>().notNull(),
+    /**
+     * NEVER credentials. Object names, table names, filters — nothing else.
+     * Secrets live one table down in `source_credentials`, encrypted, and there
+     * is no field here a password could travel in even by accident.
+     */
+    config: jsonb("config").$type<SourceConfig>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Every source read is "the ones this account configured", ordered by age.
+  (table) => [index("sources_owner_created_idx").on(table.ownerId, table.createdAt)],
+);
 
 /**
  * One source's credentials. The only table in Canon that holds a secret.
@@ -129,49 +159,74 @@ export const sourceCredentials = pgTable(
  * Survivorship rules, versioned. Never edited in place: a run records which
  * rulesetId it used, and mutable rules would make past runs unreproducible.
  */
-export const rulesets = pgTable("rulesets", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  version: integer("version").notNull().default(1),
-  rules: jsonb("rules").$type<SurvivorshipRule[]>().notNull(),
-  isActive: boolean("is_active").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const rulesets = pgTable(
+  "rulesets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /**
+     * The Clerk user this row belongs to. See the ownership note at the top of
+     * this file.
+     */
+    ownerId: text("owner_id").notNull(),
+    name: text("name").notNull(),
+    /**
+     * Per owner AND per name. Two accounts can each author a "Default policy"
+     * and each get their own v1 — version numbers are only meaningful inside
+     * the family that shares them.
+     */
+    version: integer("version").notNull().default(1),
+    rules: jsonb("rules").$type<SurvivorshipRule[]>().notNull(),
+    /** Exactly one active ruleset PER OWNER — see createRulesetVersion. */
+    isActive: boolean("is_active").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("rulesets_owner_name_idx").on(table.ownerId, table.name)],
+);
 
 /** One reconciliation execution. */
-export const runs = pgTable("runs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  /** The CRM side. */
-  sourceAId: uuid("source_a_id")
-    .notNull()
-    .references(() => sources.id),
-  /** The warehouse side. */
-  sourceBId: uuid("source_b_id")
-    .notNull()
-    .references(() => sources.id),
-  rulesetId: uuid("ruleset_id")
-    .notNull()
-    .references(() => rulesets.id),
-  /**
-   * Which model family resolved the conflicts the ruleset did not decide.
-   *
-   * On the run for the same reason `rulesetId` is: a number produced by Gemini
-   * and a number produced by Claude are only comparable if the row says which
-   * one answered. The engine reads this column and never falls back to the
-   * other provider — a run that asked for one and got the other would make
-   * every metric attributed to it wrong.
-   *
-   * Defaults to `claude` because that is what every run written before this
-   * column existed actually used. A default of `gemini` would backfill history
-   * with a claim that is not true.
-   */
-  modelProvider: text("model_provider").$type<ModelProvider>().notNull().default("claude"),
-  status: text("status").$type<RunStatus>().notNull().default("queued"),
-  stats: jsonb("stats").$type<RunStats>().notNull(),
-  error: text("error"),
-  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-  finishedAt: timestamp("finished_at", { withTimezone: true }),
-});
+export const runs = pgTable(
+  "runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /**
+     * The Clerk user this row belongs to. See the ownership note at the top of
+     * this file.
+     */
+    ownerId: text("owner_id").notNull(),
+    /** The CRM side. */
+    sourceAId: uuid("source_a_id")
+      .notNull()
+      .references(() => sources.id),
+    /** The warehouse side. */
+    sourceBId: uuid("source_b_id")
+      .notNull()
+      .references(() => sources.id),
+    rulesetId: uuid("ruleset_id")
+      .notNull()
+      .references(() => rulesets.id),
+    /**
+     * Which model family resolved the conflicts the ruleset did not decide.
+     *
+     * On the run for the same reason `rulesetId` is: a number produced by Gemini
+     * and a number produced by Claude are only comparable if the row says which
+     * one answered. The engine reads this column and never falls back to the
+     * other provider — a run that asked for one and got the other would make
+     * every metric attributed to it wrong.
+     *
+     * Defaults to `claude` because that is what every run written before this
+     * column existed actually used. A default of `gemini` would backfill history
+     * with a claim that is not true.
+     */
+    modelProvider: text("model_provider").$type<ModelProvider>().notNull().default("claude"),
+    status: text("status").$type<RunStatus>().notNull().default("queued"),
+    stats: jsonb("stats").$type<RunStats>().notNull(),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  // The runs list is always "this account's runs, newest first".
+  (table) => [index("runs_owner_started_idx").on(table.ownerId, table.startedAt)],
+);
 
 /**
  * The parts of a CanonicalEntity that are not promoted to their own column.

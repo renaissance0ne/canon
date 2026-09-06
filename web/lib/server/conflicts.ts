@@ -7,6 +7,7 @@ import {
   entities,
   matches,
   resolutions,
+  runs,
   type EntityFields,
 } from "@/lib/db/schema";
 import { childKey, countChildrenByParent } from "@/lib/server/entities";
@@ -216,14 +217,19 @@ export type QueueLoad =
  * reading it from the active ruleset would relabel old runs every time policy
  * changes.
  */
-export async function loadQueue(query: QueueQuery): Promise<QueueLoad> {
+export async function loadQueue(query: QueueQuery, ownerId: string): Promise<QueueLoad> {
+  // The whole queue is scoped by this one lookup. `conflicts`, `matches`,
+  // `entities` and `resolutions` carry no owner of their own — they are this
+  // account's because their run is — so every query below is safe exactly
+  // because the run above was resolved for this owner and no other.
   const run = query.runId
-    ? await getRunDetail(query.runId)
-    : await getLatestRunWithConflicts();
+    ? await getRunDetail(query.runId, ownerId)
+    : await getLatestRunWithConflicts(ownerId);
 
+  // A run id this account does not own reads the same as no run at all.
   if (!run) return { state: "no-runs" };
 
-  const ruleset = await getRuleset(run.rulesetId);
+  const ruleset = await getRuleset(run.rulesetId, ownerId);
   const page = await getQueuePage(query, run, ruleset?.rules ?? []);
 
   return { state: "ready", run, page };
@@ -418,8 +424,23 @@ export type ReviewTarget = {
   } | null;
 };
 
-export async function getReviewTarget(conflictId: string): Promise<ReviewTarget | null> {
-  const [row] = await baseQuery().where(eq(conflicts.id, conflictId)).limit(1);
+/**
+ * The only path where a client-supplied id reaches a conflict WITHOUT a run
+ * having been resolved for this account first — a review PATCH names a
+ * conflictId and nothing else. So the ownership join happens here, on
+ * `runs.owner_id`, rather than being inherited from a caller that never checked.
+ *
+ * A conflict belonging to another account returns null, and the route turns
+ * that into the same 404 as a conflict that does not exist.
+ */
+export async function getReviewTarget(
+  conflictId: string,
+  ownerId: string,
+): Promise<ReviewTarget | null> {
+  const [row] = await baseQuery()
+    .innerJoin(runs, eq(conflicts.runId, runs.id))
+    .where(and(eq(conflicts.id, conflictId), eq(runs.ownerId, ownerId)))
+    .limit(1);
   if (!row) return null;
 
   return {
@@ -471,7 +492,11 @@ export async function recordReview({
   action: ReviewAction;
   reviewer: Reviewer;
 }): Promise<ReviewOutcome> {
-  const target = await getReviewTarget(conflictId);
+  // Scoped by the reviewer's own id, taken from the session object the caller
+  // was handed — not from anything in the request. A conflict on someone
+  // else's run is "no such conflict", which is both true from here and the
+  // only answer that does not confirm the row exists.
+  const target = await getReviewTarget(conflictId, reviewer.userId);
   if (!target) return { ok: false, code: 404, message: "No such conflict." };
 
   if (!target.resolution) {

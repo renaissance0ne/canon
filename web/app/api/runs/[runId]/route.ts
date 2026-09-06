@@ -10,6 +10,6 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/runs/[runId
   const { runId } = await ctx.params;
   if (!isUuid(runId)) return notFound("No such run.");
 
-  const run = await getRunDetail(runId);
+  const run = await getRunDetail(runId, gate.reviewer.userId);
   return run ? Response.json({ run }) : notFound("No such run.");
 }

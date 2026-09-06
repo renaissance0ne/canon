@@ -35,15 +35,20 @@ export async function GET(request: Request, ctx: RouteContext<"/api/runs/[runId]
     return badRequest("sections must be a comma-separated list of hierarchy, decisions, orphans, stats.");
   }
 
-  const run = await getRunDetail(runId);
-  if (!run) return notFound("No such run.");
-
-  // Recorded in the file itself. An export that circulates without saying who
-  // pulled it and when is the kind of artefact this whole system exists to
-  // replace.
+  // The gate comes BEFORE the run is read, not after. It has to: the read is
+  // scoped by the reviewer's id, so there is no run to load until we know who
+  // is asking. It also means a signed-out request never reaches a query.
+  //
+  // The reviewer is recorded in the file itself. An export that circulates
+  // without saying who pulled it and when is the kind of artefact this whole
+  // system exists to replace.
   const gate = await requireReviewerForApi();
   if (!gate.ok) return gate.response;
   const reviewer = gate.reviewer;
+
+  const run = await getRunDetail(runId, reviewer.userId);
+  if (!run) return notFound("No such run.");
+
   const payload = await buildRunExport(run, reviewer.label, sections);
   const filename = `canon-run-${shortRunId(run.id).replace("·", "")}`;
 

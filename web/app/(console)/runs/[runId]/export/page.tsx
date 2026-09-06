@@ -26,12 +26,12 @@ export default async function RunExportPage({
 }: {
   params: Promise<{ runId: string }>;
 }) {
-  await requireReviewer();
+  const reviewer = await requireReviewer();
 
   const { runId } = await params;
   if (!isUuid(runId)) notFound();
 
-  const run = await getRunDetail(runId);
+  const run = await getRunDetail(runId, reviewer.userId);
   if (!run) notFound();
 
   const sizing = await getExportSizing(run);

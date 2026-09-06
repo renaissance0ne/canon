@@ -11,15 +11,15 @@ import { requireReviewer } from "@/lib/server/auth";
 
 /** Wireframe 1e. Server Component; the form below is the only client boundary. */
 export default async function NewRunPage() {
-  await requireReviewer();
+  const reviewer = await requireReviewer();
 
   // The provider probe is allowed to fail. It returns null rather than
   // throwing, and the form then offers every provider unannotated — a console
   // that will not render because a health check timed out is worse than one
   // that lets the run start and reports honestly afterwards.
   const [sources, rulesets, engineProviders] = await Promise.all([
-    listSources(),
-    listRulesets(),
+    listSources(reviewer.userId),
+    listRulesets(reviewer.userId),
     fetchEngineProviders(),
   ]);
 
@@ -29,6 +29,7 @@ export default async function NewRunPage() {
   // is the same silent-failure shape the run pipeline was just fixed for.
   const configured = await findConfiguredSourceIds(
     sources.filter((s) => requiresCredentialsForKind(s.kind)).map((s) => s.id),
+    reviewer.userId,
   );
   const connectedIds = sources
     .filter((s) => !requiresCredentialsForKind(s.kind) || configured.has(s.id))

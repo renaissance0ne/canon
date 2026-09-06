@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     return badRequest(parsed.error.issues[0]?.message ?? "Invalid query.");
   }
 
-  const load = await loadQueue(parsed.data);
+  const load = await loadQueue(parsed.data, gate.reviewer.userId);
   if (load.state === "no-runs") {
     return Response.json({ run: null, conflicts: [], total: 0, counts: null });
   }

@@ -24,7 +24,11 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/runs/[runId
   const { runId } = await ctx.params;
   if (!isUuid(runId)) return notFound("No such run.");
 
-  const run = await getRun(runId);
+  // Scoped, and the polled route is the one that most needs it: a run id is
+  // the only thing this endpoint takes, it is returned to the browser on every
+  // create, and it would otherwise report another account's live progress to
+  // anyone signed in who pasted it.
+  const run = await getRun(runId, gate.reviewer.userId);
   if (!run) return notFound("No such run.");
 
   const fromRow: EngineRunStatus = {

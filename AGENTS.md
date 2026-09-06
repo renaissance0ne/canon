@@ -547,6 +547,101 @@ correct run.
 agent's judgement. The console must say so rather than render a clean run —
 see `web/components/runs/run-degraded-note.tsx`.
 
+### GET {ENGINE_URL}/datasets
+
+```ts
+{
+  datasets: Array<{
+    name: string;           // a directory on the engine, never a path
+    generatorVersion: number;
+    seed: number; accounts: number;
+    rates: InjectionRates;  // the six injection rates it was built from
+    entitiesA: number; entitiesB: number;
+    divergences: number;    // manifest entries
+    byClass: Record<string, number>;
+    escalations: number;    // of those, how many expect `escalate`
+  }>;
+  fallback: string | null;  // what a synthetic source with no `dataset` reads
+}
+```
+
+### POST {ENGINE_URL}/datasets
+
+```ts
+// request
+{
+  name: string;             // [A-Za-z0-9][A-Za-z0-9._-]{0,63} — a name, not a path
+  seed: number;             // same seed, same bytes
+  accounts: number;         // 1..20_000
+  rates: {
+    reparent: number; staleAttribute: number; nameVariant: number;
+    missingRecord: number; duplicateRecord: number; ambiguous: number;
+  };                        // fractions of all records; must sum to ≤ 1
+  force?: boolean;          // overwrite a name that is taken
+}
+// response: the DatasetSummary above. 409 when the name is taken and
+// `force` is not set; 400 on an illegal name.
+```
+
+Synchronous, unlike `POST /runs`: generation is offline and CPU-bound (~0.1s at
+500 accounts, ~8s at the 20,000 ceiling), so the response IS the completion
+signal. It is also the one engine endpoint that takes parameters rather than a
+row id, and that does not contradict the rule keeping `/runs` down to a `runId`
+— a dataset is not a run. Nothing reads these parameters back to learn what a
+run executed; the dataset's own `meta.json` on disk is the single record of
+what a seed produced, whether it came from the console or the CLI.
+
+A synthetic source selects one by NAME in `sources.config.dataset`. The engine
+joins it under its own dataset root (`CANON_DATASET_ROOT`, default `./data`)
+and rejects anything with a separator in it — a path typed into a web form is
+still something the web layer cannot validate, but a name chosen from what
+`GET /datasets` reports is. A source that names none falls back to
+`CANON_SYNTHETIC_DATA_DIR`.
+
+### GET {ENGINE_URL}/datasets/:name
+
+```ts
+// query: limit (1..2000, default 200), offset, conflictClass, expected
+//        expected = "escalate" | "resolvable"
+{
+  dataset: DatasetSummary;          // as above
+  divergences: Array<{
+    entityId: string;               // the real-world entity, never the injection artifact
+    field: string;                  // "__record__" for orphans and duplicates
+    trueValue: string | null;       // what the canonical org says
+    sideAValue: string | null;
+    sideBValue: string | null;
+    conflictClass: "structural" | "attribute" | "cosmetic" | "orphan" | "duplicate";
+    expectedResolution: string;     // the correct value, or "escalate"
+  }>;
+  total: number;                    // AFTER filtering — what the pager walks
+  limit: number;
+  offset: number;
+}
+```
+
+The ground-truth manifest, paged. This is the answer key, and serving it to the
+console is what makes a dataset checkable rather than merely counted: a reviewer
+can see what was injected, which side holds what, and which cases are ambiguous
+on purpose.
+
+**Scoring a run against it.** `web/lib/server/ground-truth.ts` joins a run's
+conflicts to the manifest on `(entity external id, field)` — the same key
+`score_run` uses in `engine/eval/harness.py`, and it must stay the same key or
+the console and the results chapter will disagree about the same run. The
+console cannot see `ConflictOrigin`, so it tries BOTH matched entities' external
+ids: they agree except on a `duplicate`, where one side holds a minted id that
+appears in no manifest entry and the entry is recorded against the record being
+duplicated on the other side.
+
+Verdicts mirror `score_run` with one addition the harness does not need.
+`resolutions.status` is updated in place by human review, so the engine's
+original disposition is not recoverable from the row: `approved` and
+`overridden` are read as applied, and `rejected` is reported as its own verdict
+rather than folded into an agent error. Scoring always compares the AGENT's
+`proposedValue`, never `overrideValue` — a human correcting a proposal does not
+make the proposal right.
+
 ---
 
 ## Severity Model
@@ -801,6 +896,11 @@ app/api/
   sources/
     route.ts                  // GET, POST
     [sourceId]/route.ts       // GET, PATCH, DELETE
+  datasets/
+    route.ts                  // GET  → proxies the engine's dataset catalog
+                              // POST → generates one; no table, the disk is the record
+                              // the manifest itself is read server-side by
+                              // (console)/sources/datasets/[name], not proxied
   rulesets/
     route.ts                  // GET, POST (POST creates a new version, never mutates)
     [rulesetId]/route.ts      // GET
@@ -1164,7 +1264,9 @@ cd engine
 uv sync
 uv run uvicorn main:app --reload --port 8000
 
-# Generate a fresh synthetic dataset + manifest
+# Generate a fresh synthetic dataset + manifest.
+# The console does the same thing under Sources → Datasets, with the same
+# parameters, through POST {ENGINE_URL}/datasets — same function, same bytes.
 uv run python -m eval.generate --seed 42 --accounts 500 --out ./data/run42
 
 # Full evaluation sweep (all three systems, all metrics)

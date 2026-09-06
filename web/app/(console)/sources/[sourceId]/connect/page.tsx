@@ -26,12 +26,12 @@ export default async function ConnectSourcePage({
   params: Promise<{ sourceId: string }>;
   searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
-  await requireReviewer();
+  const reviewer = await requireReviewer();
 
   const { sourceId } = await params;
   if (!isUuid(sourceId)) notFound();
 
-  const source = await getSource(sourceId);
+  const source = await getSource(sourceId, reviewer.userId);
   if (!source) notFound();
 
   const { error, notice } = await searchParams;
@@ -54,7 +54,7 @@ export default async function ConnectSourcePage({
   }
 
   const [credential, encryptionReady] = await Promise.all([
-    readStatus(sourceId),
+    readStatus(sourceId, reviewer.userId),
     Promise.resolve(credentialEncryptionReady()),
   ]);
 

@@ -1,6 +1,6 @@
 import "server-only";
 import { connection } from "next/server";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { sourceCredentials, sources } from "@/lib/db/schema";
 import { encryptSecrets, type SealedSecret } from "@/lib/server/crypto";
@@ -110,7 +110,10 @@ export async function storeCredentials(input: StoreCredentialInput): Promise<Sto
  * "token · stored" and no more. There is deliberately no masked-value variant:
  * a masked value still has to travel over the wire to get masked.
  */
-export async function readStatus(sourceId: string): Promise<CredentialStatus | null> {
+export async function readStatus(
+  sourceId: string,
+  ownerId: string,
+): Promise<CredentialStatus | null> {
   await connection();
 
   // Joined rather than denormalized: `kind` lives on `sources` and is what
@@ -121,7 +124,9 @@ export async function readStatus(sourceId: string): Promise<CredentialStatus | n
     .select({ credential: sourceCredentials, kind: sources.kind })
     .from(sourceCredentials)
     .innerJoin(sources, eq(sources.id, sourceCredentials.sourceId))
-    .where(eq(sourceCredentials.sourceId, sourceId))
+    // The join `kind` needs is also the join ownership needs — a credential
+    // belongs to whoever owns its source, and has no owner column of its own.
+    .where(and(eq(sourceCredentials.sourceId, sourceId), eq(sources.ownerId, ownerId)))
     .limit(1);
 
   return row ? toStatus(row.credential, row.kind) : null;
@@ -139,7 +144,7 @@ export async function readStatus(sourceId: string): Promise<CredentialStatus | n
  * server or client — makes its output depend on when React happened to run.
  * Reading it here, in an async data-access function, keeps render pure.
  */
-export async function listCredentialStatuses(): Promise<{
+export async function listCredentialStatuses(ownerId: string): Promise<{
   bySourceId: Map<string, CredentialStatus>;
   now: number;
 }> {
@@ -148,7 +153,8 @@ export async function listCredentialStatuses(): Promise<{
   const rows = await getDb()
     .select({ credential: sourceCredentials, kind: sources.kind })
     .from(sourceCredentials)
-    .innerJoin(sources, eq(sources.id, sourceCredentials.sourceId));
+    .innerJoin(sources, eq(sources.id, sourceCredentials.sourceId))
+    .where(eq(sources.ownerId, ownerId));
 
   return {
     bySourceId: new Map(
@@ -159,13 +165,17 @@ export async function listCredentialStatuses(): Promise<{
 }
 
 /** Which of these sources have credentials. One round trip, for the sources table. */
-export async function findConfiguredSourceIds(sourceIds: string[]): Promise<Set<string>> {
+export async function findConfiguredSourceIds(
+  sourceIds: string[],
+  ownerId: string,
+): Promise<Set<string>> {
   if (sourceIds.length === 0) return new Set();
 
   const rows = await getDb()
     .select({ sourceId: sourceCredentials.sourceId })
     .from(sourceCredentials)
-    .where(inArray(sourceCredentials.sourceId, sourceIds));
+    .innerJoin(sources, eq(sources.id, sourceCredentials.sourceId))
+    .where(and(inArray(sourceCredentials.sourceId, sourceIds), eq(sources.ownerId, ownerId)));
 
   return new Set(rows.map((row) => row.sourceId));
 }
@@ -178,10 +188,20 @@ export async function findConfiguredSourceIds(sourceIds: string[]): Promise<Set<
  * indefinitely. The audit trail records that a disconnect happened; it does not
  * need to keep the secret to prove it.
  */
-export async function deleteCredentials(sourceId: string): Promise<boolean> {
-  const deleted = await getDb()
+export async function deleteCredentials(sourceId: string, ownerId: string): Promise<boolean> {
+  const db = getDb();
+
+  // A DELETE cannot join, so ownership is a subquery over the same index the
+  // scoped source read uses. Written as one statement rather than a read
+  // followed by a delete so there is no window between the check and the write.
+  const owned = db
+    .select({ id: sources.id })
+    .from(sources)
+    .where(and(eq(sources.id, sourceId), eq(sources.ownerId, ownerId)));
+
+  const deleted = await db
     .delete(sourceCredentials)
-    .where(eq(sourceCredentials.sourceId, sourceId))
+    .where(inArray(sourceCredentials.sourceId, owned))
     .returning({ id: sourceCredentials.id });
 
   return deleted.length > 0;
@@ -195,12 +215,16 @@ export async function deleteCredentials(sourceId: string): Promise<boolean> {
  * Checking here makes it a 400 on the button press instead.
  */
 export async function credentialsMissingFor(
-  sources: { id: string; kind: SourceKind; name: string }[],
+  candidates: { id: string; kind: SourceKind; name: string }[],
+  ownerId: string,
 ): Promise<string[]> {
-  const needing = sources.filter((source) => requiresCredentials(source.kind));
+  const needing = candidates.filter((source) => requiresCredentials(source.kind));
   if (needing.length === 0) return [];
 
-  const configured = await findConfiguredSourceIds(needing.map((source) => source.id));
+  const configured = await findConfiguredSourceIds(
+    needing.map((source) => source.id),
+    ownerId,
+  );
   return needing.filter((source) => !configured.has(source.id)).map((source) => source.name);
 }
 

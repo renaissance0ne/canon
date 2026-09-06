@@ -1,0 +1,21 @@
+# The build context is uploaded to ACR. Without this, `az acr build` ships the
+# 1.2 GB Windows .venv to a Linux builder that then rebuilds it from uv.lock
+# anyway.
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Generated in the Dockerfile from its seed, not shipped.
+data/
+
+# Secrets come from Container Apps, never from a layer.
+.env
+.env.*
+!.env.example
+
+.git/
+Dockerfile
+.dockerignore

@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+
+# Secrets come from Container Apps, never from a layer.
+.env
+.env.*
+!.env.example
+.clerk/
+
+.git/
+*.tsbuildinfo
+Dockerfile
+.dockerignore

@@ -58,13 +58,26 @@ const NAME_TEMPLATE: Record<SourceKind, string> = {
 };
 
 /** Wireframe 1c. Zod-validated here for the message, and again server-side for the truth. */
-export function AddSourceForm({ defaultKind }: { defaultKind: SourceKind }) {
+export function AddSourceForm({
+  defaultKind,
+  datasets,
+  fallbackDataset,
+}: {
+  defaultKind: SourceKind;
+  /** Generated datasets on the engine's disk. Empty if it did not answer. */
+  datasets: string[];
+  /** What a synthetic source reads when it names none. */
+  fallbackDataset: string | null;
+}) {
   const router = useRouter();
   const formId = useId();
 
   const [kind, setKind] = useState<SourceKind>(defaultKind);
   const [name, setName] = useState(NAME_TEMPLATE[defaultKind]);
   const [config, setConfig] = useState(CONFIG_TEMPLATE[defaultKind]);
+  // "" means "whatever the engine's default is" — a real choice, and the only
+  // one available to a source created before datasets were selectable.
+  const [dataset, setDataset] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -72,6 +85,7 @@ export function AddSourceForm({ defaultKind }: { defaultKind: SourceKind }) {
   const nameId = `${formId}-name`;
   const kindId = `${formId}-kind`;
   const configId = `${formId}-config`;
+  const datasetId = `${formId}-dataset`;
 
   /**
    * Changing kind rewrites the two fields that are only ever kind-shaped —
@@ -110,7 +124,10 @@ export function AddSourceForm({ defaultKind }: { defaultKind: SourceKind }) {
     const result = await postJson<{ source: Source }>("/api/sources", {
       name: name.trim(),
       kind,
-      config: checked.data,
+      // The dataset comes from the picker rather than the JSON box: it is the
+      // one config field that has to name something that exists, and a select
+      // over what the engine actually holds cannot be typed wrong.
+      config: kind === "synthetic" && dataset ? { ...checked.data, dataset } : checked.data,
     });
 
     if (!result.ok) {
@@ -161,6 +178,51 @@ export function AddSourceForm({ defaultKind }: { defaultKind: SourceKind }) {
           ))}
         </Select>
       </Field>
+
+      {kind === "synthetic" ? (
+        <Field
+          label="Dataset"
+          htmlFor={datasetId}
+          hint={
+            datasets.length > 0 ? (
+              <>
+                Generated on the engine, seeded and offline.{" "}
+                <Link href="/sources/datasets" className="text-g-900">
+                  Generate another
+                </Link>
+                .
+              </>
+            ) : (
+              <>
+                No datasets on the engine — or it did not answer.{" "}
+                <Link href="/sources/datasets" className="text-g-900">
+                  Generate one
+                </Link>
+                .
+              </>
+            )
+          }
+          error={errors.dataset}
+        >
+          <Select
+            {...fieldAria(datasetId, { hint: true, error: Boolean(errors.dataset) })}
+            value={dataset}
+            onChange={(event) => setDataset(event.target.value)}
+            disabled={datasets.length === 0}
+          >
+            <option value="">
+              {fallbackDataset
+                ? `engine default · ${fallbackDataset}`
+                : "engine default"}
+            </option>
+            {datasets.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
 
       <Field
         label="Config · non-secret shape only"

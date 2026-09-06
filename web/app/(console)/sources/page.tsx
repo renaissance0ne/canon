@@ -18,14 +18,14 @@ export default async function SourcesPage({
 }: {
   searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
-  await requireReviewer();
+  const reviewer = await requireReviewer();
 
   // Redacted status per source — method, expiry and which key names exist. No
   // value is read here because no read path returns one. `now` comes back with
   // it so the table can render expiry without reading a clock during render.
   const [sources, { bySourceId: credentials, now }, { error, notice }] = await Promise.all([
-    listSources(),
-    listCredentialStatuses(),
+    listSources(reviewer.userId),
+    listCredentialStatuses(reviewer.userId),
     searchParams,
   ]);
 
@@ -35,13 +35,23 @@ export default async function SourcesPage({
         title="Sources"
         meta={sources.length > 0 ? sources.length + " configured" : undefined}
         actions={
-          sources.length > 0 ? (
-            <Button asChild size="sm">
-              <Link href="/sources/new" className="no-underline">
-                Add source
+          <>
+            {/* Always offered, including from the empty state: a generated
+                dataset is what the first synthetic source reads, so it is the
+                step before adding one rather than a tool tucked away after. */}
+            <Button asChild variant="quiet" size="sm">
+              <Link href="/sources/datasets" className="no-underline">
+                Datasets
               </Link>
             </Button>
-          ) : null
+            {sources.length > 0 ? (
+              <Button asChild size="sm">
+                <Link href="/sources/new" className="no-underline">
+                  Add source
+                </Link>
+              </Button>
+            ) : null}
+          </>
         }
       />
 

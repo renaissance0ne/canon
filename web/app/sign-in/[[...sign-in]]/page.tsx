@@ -1,4 +1,4 @@
-import { SignIn } from "@clerk/nextjs";
+import { ThemedSignIn } from "@/components/auth/themed-clerk";
 import { AuthShell } from "@/components/auth/auth-shell";
 
 /**
@@ -8,7 +8,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 export default function SignInPage() {
   return (
     <AuthShell eyebrow="Sign in">
-      <SignIn />
+      <ThemedSignIn />
     </AuthShell>
   );
 }

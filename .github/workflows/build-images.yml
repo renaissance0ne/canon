@@ -1,0 +1,69 @@
+# Builds the two Canon container images and pushes them to GHCR.
+#
+# This exists because ACR Tasks (`az acr build`) is blocked on the demo Azure
+# subscription with TasksOperationsNotAllowed — a standing anti-abuse policy on
+# free and trial subscriptions, not something a retry or a flag clears. A hosted
+# runner has Docker, a fast link to PyPI, and costs nothing on a public repo,
+# so the build moves here and Azure only ever pulls a finished image.
+#
+# Pushing to GHCR rather than the ACR also removes the one recurring cost in the
+# deployment: the ACR Basic tier is ~$5/month, and this is $0.
+name: build images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # Independent images. Don't cancel the web build because the engine's
+      # torch download timed out.
+      fail-fast: false
+      matrix:
+        include:
+          - name: canon-engine
+            context: ./engine
+          - name: canon-web
+            context: ./web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.name }}:v1
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.name }}:${{ github.sha }}
+          # Every NEXT_PUBLIC_* is inlined into the client bundle at build time,
+          # so the web image needs them here. The publishable key identifies the
+          # Clerk instance and ships to the browser by design; it is not a
+          # secret, and CLERK_SECRET_KEY is deliberately absent — a build arg is
+          # recoverable from the image.
+          build-args: |
+            NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+            NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+            NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+            NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/get-started
+            NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/get-started
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

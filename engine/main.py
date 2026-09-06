@@ -21,8 +21,9 @@ from pathlib import Path
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 
+import dataset_store
 import db
 from agent.graph import (
     ModelProposer,
@@ -47,7 +48,11 @@ from pipeline.normalize import entity_uuid, normalize
 from pipeline.schema import (
     AuditAction,
     CanonicalEntity,
+    DatasetDetail,
+    DatasetsResponse,
+    DatasetSummary,
     EntityType,
+    GenerateDatasetRequest,
     ModelProvider,
     ProvidersResponse,
     ProviderStatus,
@@ -73,14 +78,18 @@ ENTITY_TYPES: tuple[EntityType, ...] = ("account", "user", "role", "territory")
 #: Every model family a run may name, in the order the console offers them.
 MODEL_PROVIDERS: tuple[ModelProvider, ...] = ("claude", "gemini")
 
-#: Where generated datasets live for sources of kind ``synthetic``.
+#: The dataset a synthetic source reads when its ``config.dataset`` names none.
 #:
-#: It is an engine setting rather than a field on ``sources.config`` because the
-#: dataset is a file on the engine's own disk: the console has no way to know
-#: what is there, and a path typed into a web form would be a path the web layer
-#: cannot validate. Which *side* of the reconciliation a synthetic source serves
-#: comes from its position in the run — source A is side "a" — so one directory
-#: serves both halves without any per-source configuration at all.
+#: The dataset lives on the engine's own disk, so a PATH is still never
+#: something the console supplies — it has no way to validate one. A NAME is,
+#: because ``GET /datasets`` tells the console what actually exists and the
+#: engine joins the chosen name under its own root (see `dataset_store`). This
+#: env var remains the answer for a source that names nothing, which is every
+#: source created before datasets were selectable.
+#:
+#: Which *side* of the reconciliation a synthetic source serves comes from its
+#: position in the run — source A is side "a" — so one directory serves both
+#: halves without any per-source configuration at all.
 SYNTHETIC_DATA_DIR_ENV = "CANON_SYNTHETIC_DATA_DIR"
 DEFAULT_SYNTHETIC_DATA_DIR = "./data/run42"
 
@@ -138,6 +147,79 @@ async def providers() -> ProvidersResponse:
             for provider in MODEL_PROVIDERS
         ]
     )
+
+
+@app.get("/datasets", response_model=DatasetsResponse)
+async def datasets() -> DatasetsResponse:
+    """Which synthetic datasets exist on this engine's disk.
+
+    Read by the console so a synthetic source can be pointed at a dataset by
+    NAME, chosen from what actually exists, rather than by a path typed into a
+    web form that the web layer has no way to validate. The engine owns the
+    disk; the console owns the choice.
+    """
+    return DatasetsResponse(
+        datasets=dataset_store.list_datasets(), fallback=_fallback_dataset()
+    )
+
+
+@app.get("/datasets/{name}", response_model=DatasetDetail)
+async def dataset_detail(
+    name: str,
+    limit: int = Query(default=200, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
+    conflict_class: str | None = Query(default=None, alias="conflictClass"),
+    expected: str | None = Query(default=None),
+) -> DatasetDetail:
+    """One dataset and a page of its ground-truth manifest.
+
+    The manifest is the answer key every reported number is measured against.
+    Serving it to the console is what lets a reviewer see WHAT was injected —
+    which side holds what, what the canonical org actually says, and which
+    cases are ambiguous on purpose — rather than taking a divergence count on
+    faith.
+
+    Paged: at the 20,000-account ceiling the manifest runs to thousands of
+    entries and a screen reads one page.
+    """
+    try:
+        detail = dataset_store.read_detail(
+            name,
+            limit=limit,
+            offset=offset,
+            conflict_class=conflict_class,
+            expected=expected,
+        )
+    except dataset_store.DatasetError as error:
+        # An illegal name is not a missing dataset. Saying so keeps a typo
+        # distinguishable from a dataset that was deleted off the disk.
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"No dataset {name!r} on this engine.")
+
+    return detail
+
+
+@app.post("/datasets", response_model=DatasetSummary, status_code=201)
+async def generate_dataset(body: GenerateDatasetRequest) -> DatasetSummary:
+    """Generate a dataset from a seed and a set of injection rates.
+
+    Synchronous, unlike ``POST /runs``: generation is offline, CPU-bound and
+    fast at the sizes the console offers, so the response IS the completion
+    signal and there is no second status surface to poll.
+
+    409 rather than a silent overwrite when the name is taken. Reported numbers
+    cite a seed, and a dataset replaced underneath them is a reproducibility
+    failure that is invisible at the moment it happens — the console asks again
+    with ``force`` if that is genuinely what was meant.
+    """
+    try:
+        return dataset_store.create_dataset(body)
+    except dataset_store.DatasetExistsError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except dataset_store.DatasetError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 def execute_run(run_id: UUID) -> RunStats:
@@ -325,7 +407,7 @@ def _build(
         config=config,
         credentials=credentials,
         side=side,
-        data_dir=_synthetic_data_dir() if source_kind == "synthetic" else None,
+        data_dir=_synthetic_data_dir(config) if source_kind == "synthetic" else None,
     )
 
 
@@ -469,12 +551,56 @@ def _source_kind(kind: str) -> SourceKind:
     return kind
 
 
-def _synthetic_data_dir() -> Path:
+def _synthetic_data_dir(config: dict[str, object]) -> Path:
+    """Which generated dataset this synthetic source reads.
+
+    ``config.dataset`` is a NAME, not a path: the engine joins it under its own
+    root and rejects anything that could be a traversal. That is what makes it
+    safe for the console to write here at all, and it is why the name is
+    validated by `dataset_store` rather than trusted — everything else in
+    `sources.config` describes objects to read, and this is the only field that
+    reaches the filesystem.
+
+    With no name, the run falls back to ``CANON_SYNTHETIC_DATA_DIR``. Sources
+    created before datasets were selectable have no name and must keep running
+    against exactly what they ran against before.
+    """
+    name = config.get("dataset")
+
+    if isinstance(name, str) and name:
+        path = dataset_store.dataset_path(name)
+        if not path.is_dir():
+            raise CredentialsMissingError(
+                f"This source reads dataset {name!r}, which is not on the engine's "
+                f"disk ({path}). Generate it in the console under Sources → "
+                f"Datasets, or point the source at one that exists."
+            )
+        return path
+
     path = Path(os.environ.get(SYNTHETIC_DATA_DIR_ENV, DEFAULT_SYNTHETIC_DATA_DIR))
     if not path.is_dir():
         raise CredentialsMissingError(
             f"{SYNTHETIC_DATA_DIR_ENV} points at {path}, which does not exist. "
-            f"Generate a dataset first: uv run python -m eval.generate --seed 42 "
-            f"--accounts 500 --out {path}"
+            f"Generate a dataset in the console under Sources → Datasets, or "
+            f"run: uv run python -m eval.generate --seed 42 --accounts 500 "
+            f"--out {path}"
         )
     return path
+
+
+def _fallback_dataset() -> str | None:
+    """The dataset a synthetic source reads when its config names none.
+
+    Reported to the console so it can say which dataset an un-named source will
+    actually run against, instead of leaving it to be inferred from an
+    environment variable nobody browsing the console can see. ``None`` when the
+    env var points outside the dataset root — then it is a path the console
+    cannot name and should not pretend to.
+    """
+    path = Path(os.environ.get(SYNTHETIC_DATA_DIR_ENV, DEFAULT_SYNTHETIC_DATA_DIR))
+    try:
+        if path.is_dir() and path.resolve().parent == dataset_store.dataset_root().resolve():
+            return path.name
+    except OSError:
+        return None
+    return None

@@ -3,17 +3,53 @@
 import { useEffect, useRef } from "react";
 import { Mesh, Program, Renderer, Triangle } from "ogl";
 import { cn } from "@/lib/cn";
+import { useTheme } from "@/components/theme/theme-provider";
 
-/* The four ramp stops, lifted straight from styles/tokens.css. The waves are
-   made of the same twelve steps as every border and label in the app — that is
-   the whole reason this reads as part of Canon rather than as stock chrome.
+/* The four ramp stops are read from styles/tokens.css at runtime rather than
+   copied here. The waves are made of the same twelve steps as every border and
+   label in the app — that is the whole reason this reads as part of Canon
+   rather than as stock chrome — and a copy would have been a second palette to
+   keep in step the moment a dark ramp existed.
    AGENTS.md § Design System: twelve steps, zero hues. */
-const RAMP = [
+const RAMP_STEPS = [
+  "--color-g-50",
+  "--color-g-100",
+  "--color-g-200",
+  "--color-g-300",
+] as const;
+
+/** The light ramp, used only if a custom property cannot be read. */
+const RAMP_FALLBACK: [number, number, number][] = [
   [0.9804, 0.9804, 0.9804], // --g-50   #FAFAFA
   [0.9569, 0.9569, 0.9608], // --g-100  #F4F4F5
   [0.8941, 0.8941, 0.9059], // --g-200  #E4E4E7
   [0.8314, 0.8314, 0.8471], // --g-300  #D4D4D8
-] as const;
+];
+
+/** #RGB or #RRGGBB to three 0..1 channels. Nothing else appears in the ramp. */
+function parseHex(value: string): [number, number, number] | null {
+  const hex = value.trim().replace("#", "");
+  const full =
+    hex.length === 3
+      ? hex
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : hex;
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return null;
+  return [
+    parseInt(full.slice(0, 2), 16) / 255,
+    parseInt(full.slice(2, 4), 16) / 255,
+    parseInt(full.slice(4, 6), 16) / 255,
+  ];
+}
+
+function readRamp(): [number, number, number][] {
+  const styles = getComputedStyle(document.documentElement);
+  return RAMP_STEPS.map(
+    (step, i) => parseHex(styles.getPropertyValue(step)) ?? RAMP_FALLBACK[i],
+  );
+}
 
 const VERTEX = /* glsl */ `
 attribute vec2 uv;
@@ -117,10 +153,16 @@ export function GradientWaves({
   className,
 }: GradientWavesProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  // The ramp is a snapshot of the custom properties, so the field has to be
+  // rebuilt when they change. Re-running the whole effect is cheaper to reason
+  // about than reaching into the uniforms, and a theme switch is not a hot path.
+  const { resolvedTheme } = useTheme();
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+
+    const ramp = readRamp();
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -155,10 +197,10 @@ export function GradientWaves({
         uAmplitude: { value: amplitude },
         uFrequency: { value: frequency },
         uContour: { value: contour },
-        uC0: { value: [...RAMP[0]] },
-        uC1: { value: [...RAMP[1]] },
-        uC2: { value: [...RAMP[2]] },
-        uC3: { value: [...RAMP[3]] },
+        uC0: { value: [...ramp[0]] },
+        uC1: { value: [...ramp[1]] },
+        uC2: { value: [...ramp[2]] },
+        uC3: { value: [...ramp[3]] },
       },
     });
 
@@ -204,7 +246,7 @@ export function GradientWaves({
       canvas.remove();
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
-  }, [amplitude, frequency, contour]);
+  }, [amplitude, frequency, contour, resolvedTheme]);
 
   return (
     <div

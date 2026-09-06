@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { datasetNameSchema } from "@/types/dataset";
 
 /** Mirrors engine/pipeline/schema.py. Change both in the same commit. */
 export const sourceKindSchema = z.enum([
@@ -9,10 +10,21 @@ export const sourceKindSchema = z.enum([
   "synthetic",
 ]);
 
-/** Non-secret shape only. Credentials live in the engine env, keyed by kind. */
+/**
+ * Non-secret shape only — object names, table names, filters. Credentials live
+ * in `source_credentials`, encrypted, and never in this column.
+ *
+ * `dataset` is the one field here that reaches a filesystem, and it is a NAME,
+ * not a path: the engine joins it under its own dataset root and rejects
+ * anything with a separator in it (engine/dataset_store.py). It applies to
+ * synthetic sources only; a source that names none falls back to the engine's
+ * CANON_SYNTHETIC_DATA_DIR, which is what every source created before datasets
+ * were selectable does.
+ */
 export const sourceConfigSchema = z.object({
   objects: z.array(z.string()).min(1),
   filter: z.string().optional(),
+  dataset: datasetNameSchema.optional(),
 });
 
 export const createSourceSchema = z.object({

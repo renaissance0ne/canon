@@ -45,6 +45,12 @@ export function SourceTable({
             </td>
             <td className="pr-4 font-mono text-value text-g-500">
               {source.config.objects.join(", ")}
+              {/* Which generated dataset this one actually reads. Two synthetic
+                  sources are otherwise indistinguishable in this list even when
+                  they run against different ground truth. */}
+              {source.config.dataset ? (
+                <span className="ml-2 text-g-700">· {source.config.dataset}</span>
+              ) : null}
             </td>
             <td className="font-mono text-value">
               <CredentialCell

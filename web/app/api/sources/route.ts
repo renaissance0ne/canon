@@ -11,17 +11,19 @@ import { createSourceSchema } from "@/types/source";
  *
  * Nothing secret is stored here: `createSourceSchema` accepts a name, a kind
  * and a non-secret config shape, and there is no field a credential could
- * travel in. Connection secrets live in the engine's environment keyed by
- * `kind` (AGENTS.md § Security Rules).
+ * travel in. Connection secrets live in `source_credentials`, encrypted
+ * (AGENTS.md § Security Rules).
  *
  * The session requirement is enforced by `requireReviewerForApi()` on each
- * handler below, not by path matching in proxy.ts.
+ * handler below, not by path matching in proxy.ts. Being signed in is only half
+ * of it: the session also supplies the OWNER, and every query below is scoped
+ * to it. A signed-in request is not a request for everyone's sources.
  */
 
 export async function GET() {
   const gate = await requireReviewerForApi();
   if (!gate.ok) return gate.response;
-  return Response.json({ sources: await listSources() });
+  return Response.json({ sources: await listSources(gate.reviewer.userId) });
 }
 
 export async function POST(request: Request) {
@@ -31,6 +33,8 @@ export async function POST(request: Request) {
   const parsed = await parseJson(request, createSourceSchema);
   if (!parsed.ok) return parsed.response;
 
-  const source = await createSource(parsed.data);
+  // Owner from the session, never from the body — the same rule that governs
+  // `audit_log.actor`.
+  const source = await createSource(parsed.data, gate.reviewer.userId);
   return Response.json({ source }, { status: 201 });
 }

@@ -27,15 +27,22 @@ export async function GET(request: Request) {
   const action = rawAction ? auditActionSchema.safeParse(rawAction) : null;
   if (rawAction && !action?.success) return badRequest("Unknown audit action.");
 
-  const run = runId ? await getRunDetail(runId) : null;
-  if (runId && !run) return notFound("No such run.");
-
+  // The gate comes BEFORE either read, not after. Both are scoped by the
+  // reviewer's id, so there is nothing to look up until we know who is asking.
+  //
   // Reading the trail is itself a thing a person did, so the file records who
   // pulled it — but it is a read, and reads do not append to an append-only log.
   const gate = await requireReviewerForApi();
   if (!gate.ok) return gate.response;
 
+  const run = runId ? await getRunDetail(runId, gate.reviewer.userId) : null;
+  if (runId && !run) return notFound("No such run.");
+
+  // Unfiltered means "every run this account has started", never every run in
+  // the install. `ownerId` is a required field on AuditFilter precisely so this
+  // call cannot be written without it.
   const entries = await listAuditForExport({
+    ownerId: gate.reviewer.userId,
     runId,
     action: action?.success ? action.data : undefined,
   });

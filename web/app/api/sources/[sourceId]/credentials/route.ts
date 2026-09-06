@@ -37,7 +37,9 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/sources/[so
   const { sourceId } = await ctx.params;
   if (!isUuid(sourceId)) return notFound("No such source.");
 
-  const status = await readStatus(sourceId);
+  // Scoped: a credential belongs to whoever owns its source. Another account's
+  // source reads as having no credential, which is true from here.
+  const status = await readStatus(sourceId, gate.reviewer.userId);
   return Response.json({ credential: status });
 }
 
@@ -55,7 +57,7 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/sources/[sou
   // which fields are secret, so a client that could name its own kind could
   // name one whose schema marks the password field `public` — and Canon would
   // store it in clear, in a column the console displays.
-  const source = await getSource(sourceId);
+  const source = await getSource(sourceId, gate.reviewer.userId);
   if (!source) return notFound("No such source.");
 
   if (source.kind !== parsed.data.kind) {
@@ -120,7 +122,10 @@ export async function DELETE(
   const { sourceId } = await ctx.params;
   if (!isUuid(sourceId)) return notFound("No such source.");
 
-  const removed = await deleteCredentials(sourceId);
+  // Scoped inside the DELETE itself rather than by a read first — see
+  // lib/server/credentials.ts. Disconnecting someone else's source is the one
+  // cross-account write that would be genuinely destructive.
+  const removed = await deleteCredentials(sourceId, gate.reviewer.userId);
   if (!removed) return notFound("This source has no stored credential.");
 
   return Response.json({ sourceId, disconnected: true });

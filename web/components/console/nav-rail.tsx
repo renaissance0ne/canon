@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { UserButton, useUser } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { CanonLockup } from "@/components/canon-mark";
 import { SignOutControl } from "@/components/auth/sign-out-control";
+import { ThemedUserButton } from "@/components/auth/themed-clerk";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/cn";
 import { reviewerLabel } from "@/lib/reviewer-label";
 
@@ -59,11 +61,18 @@ export function NavRail() {
           here is the same one that lands in audit_log.actor. */}
       <div className="mt-auto flex flex-col gap-3 border-t border-hairline pt-4">
         <div className="flex items-center gap-2.5">
-          <UserButton />
+          <ThemedUserButton />
           {/* Reserved height either way, so the rail does not shift on load. */}
           <span className="min-w-0 flex-1 truncate font-mono text-[11px] leading-4 text-g-700">
             {isLoaded ? reviewerLabel(user, "signed in") : ""}
           </span>
+        </div>
+
+        {/* Labelled, like every other mark in this interface. The switch alone
+            would be two gray glyphs in a rail that has no other icons. */}
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-label uppercase text-g-500">Theme</span>
+          <ThemeToggle />
         </div>
 
         {/* Explicit, not buried in the avatar menu. Signing out is how a

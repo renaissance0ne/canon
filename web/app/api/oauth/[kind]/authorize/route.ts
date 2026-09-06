@@ -25,7 +25,7 @@ import { sourceKindSchema } from "@/types/source";
  * warehouse should end up where they started, told what went wrong.
  */
 export async function GET(request: Request, ctx: RouteContext<"/api/oauth/[kind]/authorize">) {
-  await requireReviewer();
+  const reviewer = await requireReviewer();
 
   const { kind: rawKind } = await ctx.params;
   const kind = sourceKindSchema.safeParse(rawKind);
@@ -40,7 +40,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/oauth/[kind]
     return fail("/sources", "That connect link is missing its source.");
   }
 
-  const source = await getSource(sourceId);
+  const source = await getSource(sourceId, reviewer.userId);
   if (!source) return fail("/sources", "No such source.");
 
   if (source.kind !== kind.data) {

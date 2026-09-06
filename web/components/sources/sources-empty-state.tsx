@@ -54,7 +54,12 @@ export function SourcesEmptyState() {
               Use synthetic dataset
             </Link>
           </Button>
-          <p className="font-mono text-value text-g-500">seed 42</p>
+          {/* The step before that one, if nothing has been generated yet. */}
+          <Button asChild variant="ghost">
+            <Link href="/sources/datasets" className="no-underline">
+              Generate a dataset
+            </Link>
+          </Button>
         </div>
       </GlassPanel>
     </motion.div>

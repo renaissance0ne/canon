@@ -25,6 +25,13 @@ import {
  * engine advances `status` and `stats` as the pipeline moves. Nothing here ever
  * writes `entities`, `matches` or `conflicts` — those are engine-owned, and the
  * web layer reading them is the whole point of the split.
+ *
+ * `runs` is also the ownership root for everything the engine writes. Entities,
+ * matches, conflicts, resolutions and audit entries carry no owner of their
+ * own; they are this account's because their `runId` is. So every function that
+ * resolves a run takes a required `ownerId`, and every derived read downstream
+ * is safe precisely because the run it was handed had already been scoped here.
+ * Do not add a run lookup that skips it.
  */
 
 /** The two source rows are joined twice, so each side needs its own alias. */
@@ -49,7 +56,7 @@ const detailColumns = {
 };
 
 /** Newest first. A run list is read for "what happened last", every time. */
-export async function listRuns(limit = 50): Promise<RunDetail[]> {
+export async function listRuns(ownerId: string, limit = 50): Promise<RunDetail[]> {
   await connection();
 
   const rows = await getDb()
@@ -58,6 +65,7 @@ export async function listRuns(limit = 50): Promise<RunDetail[]> {
     .innerJoin(sourceA, eq(runs.sourceAId, sourceA.id))
     .innerJoin(sourceB, eq(runs.sourceBId, sourceB.id))
     .innerJoin(rulesets, eq(runs.rulesetId, rulesets.id))
+    .where(eq(runs.ownerId, ownerId))
     .orderBy(desc(runs.startedAt))
     .limit(limit);
 
@@ -72,7 +80,7 @@ export async function listRuns(limit = 50): Promise<RunDetail[]> {
  * run thirty seconds ago is a worse default than showing them the work that is
  * still waiting.
  */
-export async function getLatestRunWithConflicts(): Promise<RunDetail | null> {
+export async function getLatestRunWithConflicts(ownerId: string): Promise<RunDetail | null> {
   await connection();
 
   const [row] = await getDb()
@@ -82,13 +90,18 @@ export async function getLatestRunWithConflicts(): Promise<RunDetail | null> {
     .innerJoin(sourceB, eq(runs.sourceBId, sourceB.id))
     .innerJoin(rulesets, eq(runs.rulesetId, rulesets.id))
     .innerJoin(conflicts, eq(conflicts.runId, runs.id))
+    .where(eq(runs.ownerId, ownerId))
     .orderBy(desc(runs.startedAt))
     .limit(1);
 
   return row ? runDetailSchema.parse(row) : null;
 }
 
-export async function getRunDetail(runId: string): Promise<RunDetail | null> {
+/**
+ * Null for a run this account does not own, exactly as for one that does not
+ * exist. Callers turn both into the same 404 — see the note in sources.ts.
+ */
+export async function getRunDetail(runId: string, ownerId: string): Promise<RunDetail | null> {
   await connection();
 
   const [row] = await getDb()
@@ -97,17 +110,22 @@ export async function getRunDetail(runId: string): Promise<RunDetail | null> {
     .innerJoin(sourceA, eq(runs.sourceAId, sourceA.id))
     .innerJoin(sourceB, eq(runs.sourceBId, sourceB.id))
     .innerJoin(rulesets, eq(runs.rulesetId, rulesets.id))
-    .where(eq(runs.id, runId))
+    .where(and(eq(runs.id, runId), eq(runs.ownerId, ownerId)))
     .limit(1);
 
   return row ? runDetailSchema.parse(row) : null;
 }
 
 /** The bare row, without the joins. Used by the polled status route. */
-export async function getRun(runId: string): Promise<Run | null> {
+export async function getRun(runId: string, ownerId: string): Promise<Run | null> {
   await connection();
 
-  const [row] = await getDb().select().from(runs).where(eq(runs.id, runId)).limit(1);
+  const [row] = await getDb()
+    .select()
+    .from(runs)
+    .where(and(eq(runs.id, runId), eq(runs.ownerId, ownerId)))
+    .limit(1);
+
   return row ? runSchema.parse(row) : null;
 }
 
@@ -119,11 +137,16 @@ export async function getRun(runId: string): Promise<Run | null> {
  * exists in Postgres but never reached the engine is a recoverable, visible
  * state (wireframe 1h); a dispatch that succeeded against a row that failed to
  * insert is not.
+ *
+ * `ownerId` is from the session. The caller must ALSO have checked that both
+ * sources and the ruleset belong to that owner — the FKs will happily point a
+ * run at someone else's source, and this insert is not the place that catches
+ * it. POST /api/runs does, by loading each one scoped.
  */
-export async function createRun(input: CreateRun): Promise<Run> {
+export async function createRun(input: CreateRun, ownerId: string): Promise<Run> {
   const [row] = await getDb()
     .insert(runs)
-    .values({ ...input, status: "queued", stats: EMPTY_RUN_STATS })
+    .values({ ...input, ownerId, status: "queued", stats: EMPTY_RUN_STATS })
     .returning();
 
   return runSchema.parse(row);
@@ -150,6 +173,10 @@ export async function failUndispatchedRun(runId: string, error: string): Promise
  *
  * Reads an engine-owned table. Empty until the detect stage has run, which is
  * why the caller renders the histogram only for a complete run.
+ *
+ * Scoped by the run it is given, not by an owner of its own: `conflicts` has no
+ * owner column, and the only legitimate way to reach this is with a `runId`
+ * that `getRunDetail` already resolved for this account.
  */
 export async function getSeverityBreakdown(runId: string): Promise<SeverityBreakdown> {
   await connection();
