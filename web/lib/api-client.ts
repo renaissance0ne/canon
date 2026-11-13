@@ -24,8 +24,13 @@ export async function patchJson<T>(url: string, body: unknown): Promise<PostResu
   return sendJson<T>("PATCH", url, body);
 }
 
+/** A DELETE with no body. Same result shape, so callers handle failure alike. */
+export async function deleteJson<T>(url: string): Promise<PostResult<T>> {
+  return sendJson<T>("DELETE", url, undefined);
+}
+
 async function sendJson<T>(
-  method: "POST" | "PATCH",
+  method: "POST" | "PATCH" | "DELETE",
   url: string,
   body: unknown,
 ): Promise<PostResult<T>> {
@@ -34,8 +39,9 @@ async function sendJson<T>(
   try {
     response = await fetch(url, {
       method,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+      ...(body === undefined
+        ? {}
+        : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
     });
   } catch {
     return { ok: false, message: "Could not reach the server. Check your connection and retry." };

@@ -61,8 +61,8 @@ export async function POST(request: Request) {
     getSource(sourceBId, reviewer.userId),
     getRuleset(rulesetId, reviewer.userId),
   ]);
-  if (!sourceA) return badRequest("Source A no longer exists.");
-  if (!sourceB) return badRequest("Source B no longer exists.");
+  if (!sourceA) return badRequest("Source A no longer exists or has been removed.");
+  if (!sourceB) return badRequest("Source B no longer exists or has been removed.");
   if (!ruleset) return badRequest("That ruleset version no longer exists.");
 
   // A run that starts and dies at the extract step because nobody connected

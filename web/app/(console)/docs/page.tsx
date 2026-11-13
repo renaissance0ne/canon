@@ -358,6 +358,17 @@ function Sources() {
         source, and never shown again on any screen — the console only ever says
         which ones exist.
       </Prose>
+      <DocHeading>Removing a source</DocHeading>
+      <Prose>
+        Choose <strong>Remove</strong> on its row in{" "}
+        <Link href="/sources">Sources</Link>; the console says what will happen
+        before you confirm. A source no run has used is <strong>deleted</strong>{" "}
+        permanently, with its stored credentials. A source that runs have used is{" "}
+        <strong>archived</strong>: it disappears from Sources and from the
+        new-run form and can never start a run again, but every run that used it
+        still names it, and its conflicts, decisions and audit trail are
+        untouched. Its credentials are deleted either way.
+      </Prose>
     </DocSection>
   );
 }

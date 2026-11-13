@@ -1,9 +1,18 @@
 import "server-only";
 import { connection } from "next/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { sources } from "@/lib/db/schema";
+import { runs, sourceCredentials, sources } from "@/lib/db/schema";
 import { sourceSchema, type CreateSource, type Source } from "@/types/source";
+
+/**
+ * Archived sources are invisible to every read in this module — lists, the
+ * single read the run route and the connect screens use, and the ownership
+ * check. That is what makes archiving mean "cannot start a run": the run route
+ * resolves both sources through `getSource`, and an archived one reads as gone.
+ * Past runs still name their sources, because run queries join on the id.
+ */
+const LIVE = isNull(sources.archivedAt);
 
 /**
  * Server Component data access. Everything in the console is a Server
@@ -26,7 +35,7 @@ export async function listSources(ownerId: string): Promise<Source[]> {
   const rows = await getDb()
     .select()
     .from(sources)
-    .where(eq(sources.ownerId, ownerId))
+    .where(and(eq(sources.ownerId, ownerId), LIVE))
     .orderBy(sources.createdAt);
 
   return rows.map((row) => sourceSchema.parse(row));
@@ -53,7 +62,7 @@ export async function getSource(id: string, ownerId: string): Promise<Source | n
   const [row] = await getDb()
     .select()
     .from(sources)
-    .where(and(eq(sources.id, id), eq(sources.ownerId, ownerId)))
+    .where(and(eq(sources.id, id), eq(sources.ownerId, ownerId), LIVE))
     .limit(1);
 
   return row ? sourceSchema.parse(row) : null;
@@ -66,7 +75,7 @@ export async function findSourceIds(ids: string[], ownerId: string): Promise<Set
   const rows = await getDb()
     .select({ id: sources.id })
     .from(sources)
-    .where(and(inArray(sources.id, ids), eq(sources.ownerId, ownerId)));
+    .where(and(inArray(sources.id, ids), eq(sources.ownerId, ownerId), LIVE));
 
   return new Set(rows.map((row) => row.id));
 }
@@ -88,4 +97,84 @@ export async function createSource(input: CreateSource, ownerId: string): Promis
     .returning();
 
   return sourceSchema.parse(row);
+}
+
+/**
+ * How many runs read each of this account's sources, as either side.
+ *
+ * The Sources screen shows it beside the remove control, because it decides
+ * what removing does — and a reviewer should know before they confirm, not
+ * after.
+ */
+export async function countRunsBySource(ownerId: string): Promise<Map<string, number>> {
+  const db = getDb();
+  const [asA, asB] = await Promise.all([
+    db
+      .select({ sourceId: runs.sourceAId, n: count() })
+      .from(runs)
+      .where(eq(runs.ownerId, ownerId))
+      .groupBy(runs.sourceAId),
+    db
+      .select({ sourceId: runs.sourceBId, n: count() })
+      .from(runs)
+      .where(eq(runs.ownerId, ownerId))
+      .groupBy(runs.sourceBId),
+  ]);
+
+  const counts = new Map<string, number>();
+  for (const { sourceId, n } of [...asA, ...asB]) {
+    counts.set(sourceId, (counts.get(sourceId) ?? 0) + n);
+  }
+  return counts;
+}
+
+export type RemoveSourceOutcome =
+  | { outcome: "deleted" }
+  | { outcome: "archived"; runs: number };
+
+/**
+ * Remove a source: delete it if no run ever read it, archive it if one did.
+ *
+ * A used source cannot be deleted. `runs` and `entities` reference it, so the
+ * database would refuse — and forcing it would mean deleting those runs, their
+ * conflicts and decisions, and the audit trail AGENTS.md says is never deleted.
+ * Archiving keeps all of that readable while taking the source out of every
+ * list and out of the new-run form. Its stored credentials are deleted either
+ * way: a source that can never run again has no reason to keep a secret.
+ *
+ * One transaction, and the source row is locked first. Creating a run takes a
+ * key-share lock on each source it references, so the lock here makes "count
+ * the runs, then delete" atomic — a run cannot appear between the two and turn
+ * the delete into a foreign-key failure.
+ *
+ * Returns null for a source this account does not own or has already removed,
+ * the same answer as for one that never existed.
+ */
+export async function removeSource(
+  id: string,
+  ownerId: string,
+): Promise<RemoveSourceOutcome | null> {
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .select({ id: sources.id })
+      .from(sources)
+      .where(and(eq(sources.id, id), eq(sources.ownerId, ownerId), LIVE))
+      .for("update");
+    if (!row) return null;
+
+    const [{ n: runCount }] = await tx
+      .select({ n: count() })
+      .from(runs)
+      .where(or(eq(runs.sourceAId, id), eq(runs.sourceBId, id)));
+
+    if (runCount === 0) {
+      // `source_credentials` cascades on this delete.
+      await tx.delete(sources).where(eq(sources.id, id));
+      return { outcome: "deleted" as const };
+    }
+
+    await tx.update(sources).set({ archivedAt: new Date() }).where(eq(sources.id, id));
+    await tx.delete(sourceCredentials).where(eq(sourceCredentials.sourceId, id));
+    return { outcome: "archived" as const, runs: runCount };
+  });
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RemoveSourceControl } from "@/components/sources/remove-source-control";
 import { SOURCE_KIND_LABEL, SOURCE_KIND_SIDE, type Source } from "@/types/source";
 import { AUTH_METHOD_LABEL, requiresCredentials, type CredentialStatus } from "@/types/credentials";
 
@@ -9,9 +10,12 @@ import { AUTH_METHOD_LABEL, requiresCredentials, type CredentialStatus } from "@
 export function SourceTable({
   sources,
   credentials,
+  runCounts,
   now,
 }: {
   sources: Source[];
+  /** Runs that read each source. Decides whether removing deletes or archives. */
+  runCounts: Map<string, number>;
   /** Redacted status by source id. Key names and dates only — never a value. */
   credentials: Map<string, CredentialStatus>;
   /**
@@ -30,7 +34,10 @@ export function SourceTable({
           <th className="pb-2 pr-4 text-label font-medium uppercase text-g-500">Kind</th>
           <th className="pb-2 pr-4 text-label font-medium uppercase text-g-500">Side</th>
           <th className="pb-2 pr-4 text-label font-medium uppercase text-g-500">Objects</th>
-          <th className="pb-2 text-label font-medium uppercase text-g-500">Credential</th>
+          <th className="pb-2 pr-4 text-label font-medium uppercase text-g-500">Credential</th>
+          <th className="pb-2 text-label font-medium uppercase text-g-500">
+            <span className="sr-only">Remove</span>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -52,11 +59,18 @@ export function SourceTable({
                 <span className="ml-2 text-g-700">· {source.config.dataset}</span>
               ) : null}
             </td>
-            <td className="font-mono text-value">
+            <td className="pr-4 font-mono text-value">
               <CredentialCell
                 source={source}
                 credential={credentials.get(source.id) ?? null}
                 now={now}
+              />
+            </td>
+            <td className="text-right">
+              <RemoveSourceControl
+                sourceId={source.id}
+                sourceName={source.name}
+                runCount={runCounts.get(source.id) ?? 0}
               />
             </td>
           </tr>

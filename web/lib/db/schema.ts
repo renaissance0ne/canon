@@ -80,6 +80,15 @@ export const sources = pgTable(
      */
     config: jsonb("config").$type<SourceConfig>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Set when a source that runs have used is removed. Such a source cannot be
+     * deleted: `runs` and `entities` reference it, and erasing it would erase
+     * those runs' history and the audit trail behind them — which AGENTS.md
+     * says is never deleted. Archiving hides it from every list and from the
+     * new-run form, and stops it starting runs, while past runs still name it.
+     * A source no run ever used is deleted outright instead.
+     */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   // Every source read is "the ones this account configured", ordered by age.
   (table) => [index("sources_owner_created_idx").on(table.ownerId, table.createdAt)],

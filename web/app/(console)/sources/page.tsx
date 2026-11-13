@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/console/page-header";
 import { SourcesEmptyState } from "@/components/sources/sources-empty-state";
 import { SourceTable } from "@/components/sources/source-table";
 import { Button } from "@/components/ui/button";
-import { listSources } from "@/lib/server/sources";
+import { countRunsBySource, listSources } from "@/lib/server/sources";
 import { listCredentialStatuses } from "@/lib/server/credentials";
 import Link from "next/link";
 import { requireReviewer } from "@/lib/server/auth";
@@ -23,11 +23,13 @@ export default async function SourcesPage({
   // Redacted status per source — method, expiry and which key names exist. No
   // value is read here because no read path returns one. `now` comes back with
   // it so the table can render expiry without reading a clock during render.
-  const [sources, { bySourceId: credentials, now }, { error, notice }] = await Promise.all([
-    listSources(reviewer.userId),
-    listCredentialStatuses(reviewer.userId),
-    searchParams,
-  ]);
+  const [sources, { bySourceId: credentials, now }, runCounts, { error, notice }] =
+    await Promise.all([
+      listSources(reviewer.userId),
+      listCredentialStatuses(reviewer.userId),
+      countRunsBySource(reviewer.userId),
+      searchParams,
+    ]);
 
   return (
     <>
@@ -72,7 +74,12 @@ export default async function SourcesPage({
         {sources.length === 0 ? (
           <SourcesEmptyState />
         ) : (
-          <SourceTable sources={sources} credentials={credentials} now={now} />
+          <SourceTable
+            sources={sources}
+            credentials={credentials}
+            runCounts={runCounts}
+            now={now}
+          />
         )}
       </div>
     </>

@@ -298,6 +298,7 @@ Implemented in `web/lib/db/schema.ts` (Drizzle). Generate and apply with
   kind: text,                   // "salesforce" | "hubspot" | "databricks" | "snowflake" | "synthetic"
   config: jsonb,                // connection config; NEVER credentials
   createdAt: timestamptz,
+  archivedAt: timestamptz,      // nullable — set when a source runs have used is removed
 }
 
 // rulesets — survivorship rules, versioned
@@ -911,7 +912,8 @@ app/api/
       resolution/route.ts     // PATCH → approve | reject | override; appends audit_log
   sources/
     route.ts                  // GET, POST
-    [sourceId]/route.ts       // GET, PATCH, DELETE
+    [sourceId]/route.ts       // DELETE → deletes a source no run used; archives one
+                              //          runs used (history and audit stay intact)
   datasets/
     route.ts                  // GET  → proxies the engine's dataset catalog
                               // POST → generates one; no table, the disk is the record
