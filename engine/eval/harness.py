@@ -17,7 +17,7 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
 from uuid import UUID
 
 from dotenv import load_dotenv
@@ -95,6 +95,11 @@ RATE_CARDS: dict[ModelProvider, RateCard] = {
     # does, and a stale figure here is a wrong number in a results table rather
     # than a stale comment.
     "gemini": RateCard(input=0.10, output=0.40, cache_read=0.025, cache_write=0.00),
+    # gpt-4.1-mini, Global Standard deployment — Azure retail list price
+    # (prices.azure.com, November 2026). Azure caches the repeated prefix on
+    # its own and charges no write premium, so `cache_write` is 0. A Standard
+    # (regional) deployment lists about 10% higher; this card assumes Global.
+    "azure_openai": RateCard(input=0.40, output=1.60, cache_read=0.10, cache_write=0.00),
 }
 
 #: The policy the reported numbers were produced under.
@@ -602,7 +607,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--provider",
         default="claude",
-        choices=("claude", "gemini"),
+        choices=get_args(ModelProvider),
         help="which model family resolves; reported alongside the numbers",
     )
     parser.add_argument(

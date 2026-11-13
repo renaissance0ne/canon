@@ -37,7 +37,7 @@ from agent.graph import (
     model_concurrency,
     resolve,
 )
-from agent.prompts import API_KEY_ENV, has_api_key, resolution_model
+from agent.prompts import has_api_key, missing_settings, resolution_model
 from connectors.base import Connector
 from connectors.factory import build_connector
 from credentials import (
@@ -104,7 +104,7 @@ app = FastAPI(title="Canon reconciliation engine", version="0.1.0", lifespan=lif
 ENTITY_TYPES: tuple[EntityType, ...] = ("account", "user", "role", "territory")
 
 #: Every model family a run may name, in the order the console offers them.
-MODEL_PROVIDERS: tuple[ModelProvider, ...] = ("claude", "gemini")
+MODEL_PROVIDERS: tuple[ModelProvider, ...] = ("claude", "gemini", "azure_openai")
 
 #: The dataset a synthetic source reads when its ``config.dataset`` names none.
 #:
@@ -479,7 +479,7 @@ def _build_proposer(
         detail={
             "modelProvider": provider,
             "agentAvailable": False,
-            "reason": f"{API_KEY_ENV[provider]} is not set",
+            "reason": f"{', '.join(missing_settings(provider))} not set",
         },
     )
     return None

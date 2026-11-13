@@ -29,6 +29,7 @@ must never be auto-resolved.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import threading
@@ -36,7 +37,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, cast
 from uuid import UUID
 
 from langgraph.graph import END, START, StateGraph
@@ -48,9 +49,16 @@ from agent.prompts import (
     build_conflict_block,
     build_ruleset_block,
     gemini_parameters_json_schema,
+    missing_settings,
+    openai_function_tool,
     resolution_model,
 )
 from pipeline.detect import ConflictOrigin
+
+if TYPE_CHECKING:
+    # Imported for annotations only; the client itself is built lazily in
+    # `_default_azure_openai_client`, like the two SDK clients.
+    import httpx
 from pipeline.normalize import fold_name
 from pipeline.schema import (
     Conflict,
@@ -621,10 +629,118 @@ class GeminiProposer(ModelProposer):
             #: stays 0.
 
 
+class AzureOpenAIProposer(ModelProposer):
+    """``propose``, backed by an Azure OpenAI deployment (gpt-4.1-mini).
+
+    Spoken over the v1 API with a plain HTTP client rather than an SDK: it is
+    one POST with a stable JSON shape, and the client library it would need is
+    a dependency the engine does not otherwise carry. ``httpx`` is already here
+    for the other two providers.
+
+    The same three guarantees as the other providers, reached through this API:
+
+    * **Forced tool call** — ``tool_choice`` names the function, and the
+      function is ``strict``, so the service itself guarantees the arguments
+      match the schema. ``parallel_tool_calls`` is off because strict schemas
+      are only enforced for a single call.
+    * **No hidden reasoning** — gpt-4.1-mini is not a reasoning model, so there
+      is no scratchpad to switch off; the deployment is pinned to it for that
+      reason.
+    * **Ruleset as a stable prefix** — Azure caches a repeated prompt prefix on
+      its own. The ruleset is the system message and the tool list never
+      changes, so everything ahead of the conflict is byte-identical per call.
+
+    ``temperature`` 0 for the same reason Gemini runs at 0: the same conflict
+    must resolve the same way on two runs of the benchmark.
+    """
+
+    provider: ModelProvider = "azure_openai"
+
+    def __init__(
+        self,
+        rules: list[SurvivorshipRule],
+        *,
+        client: ModelClient | None = None,
+        model: str | None = None,
+        max_calls: int | None = None,
+    ) -> None:
+        super().__init__(rules, model=model, max_calls=max_calls)
+        self._client = client if client is not None else _default_azure_openai_client()
+        self._tool = openai_function_tool()
+
+    def _propose(self, client: ModelClient, block: str) -> Proposal | None:
+        response = client.post(
+            "chat/completions",
+            json={
+                #: The deployment name — see MODEL_RESOLUTION_AZURE_OPENAI.
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": self._ruleset_block},
+                    {"role": "user", "content": block},
+                ],
+                "tools": [self._tool],
+                "tool_choice": {
+                    "type": "function",
+                    "function": {"name": SUBMIT_RESOLUTION_NAME},
+                },
+                "parallel_tool_calls": False,
+                "temperature": 0,
+                "max_completion_tokens": 1024,
+            },
+        )
+        if response.status_code >= 400:
+            raise ProviderHTTPError.from_response(response)
+
+        payload = response.json()
+        self._record(payload)
+        return _read_openai_proposal(payload)
+
+    def _record(self, payload: dict[str, Any]) -> None:
+        usage = payload.get("usage") or {}
+        details = usage.get("prompt_tokens_details") or {}
+        with self._lock:
+            self.usage.calls += 1
+            #: Like Gemini, `prompt_tokens` INCLUDES the cached prefix, so it is
+            #: split out here — otherwise `total_tokens` would bill the ruleset
+            #: twice on every cached call.
+            prompt = int(usage.get("prompt_tokens") or 0)
+            cached = int(details.get("cached_tokens") or 0)
+            self.usage.cache_read_tokens += cached
+            self.usage.input_tokens += max(prompt - cached, 0)
+            self.usage.output_tokens += int(usage.get("completion_tokens") or 0)
+
+
+class ProviderHTTPError(Exception):
+    """A non-2xx answer from a provider spoken to over plain HTTP.
+
+    Carries ``status_code`` so ``_is_rate_limited`` and ``_is_unrecoverable``
+    classify it exactly as they classify the SDKs' own errors, and puts the
+    server's advised wait in its message in the form ``_retry_after`` reads.
+    The body is included because Azure explains a 400 — a content filter, a
+    missing deployment — there and nowhere else.
+    """
+
+    def __init__(self, status_code: int, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+    @classmethod
+    def from_response(cls, response: httpx.Response) -> ProviderHTTPError:
+        headers = response.headers
+        retry_ms = headers.get("retry-after-ms")
+        retry = (
+            f"{float(retry_ms) / 1000:.1f}" if retry_ms else headers.get("retry-after")
+        )
+        body = response.text[:500]
+        advised = f" retry-after: {retry}" if retry else ""
+        return cls(response.status_code, f"HTTP {response.status_code}: {body}{advised}")
+
+
 #: Every provider Canon can resolve with, by name.
 PROPOSERS: dict[ModelProvider, type[ModelProposer]] = {
     "claude": ClaudeProposer,
     "gemini": GeminiProposer,
+    "azure_openai": AzureOpenAIProposer,
 }
 
 
@@ -644,10 +760,12 @@ def build_proposer(
 
 
 def missing_key_message(provider: ModelProvider) -> str:
-    """What to tell an operator whose chosen provider has no key."""
+    """What to tell an operator whose chosen provider is not configured."""
+    missing = missing_settings(provider) or [API_KEY_ENV[provider]]
+    verb = "is" if len(missing) == 1 else "are"
     return (
-        f"{API_KEY_ENV[provider]} is not set in engine/.env, so the {provider} agent "
-        f"cannot run. Conflicts the ruleset does not decide will escalate."
+        f"{' and '.join(missing)} {verb} not set in engine/.env, so the {provider} "
+        f"agent cannot run. Conflicts the ruleset does not decide will escalate."
     )
 
 
@@ -680,6 +798,58 @@ def _default_gemini_client() -> ModelClient | None:
     except ImportError:
         return None
     return genai.Client(api_key=os.environ[API_KEY_ENV["gemini"]])
+
+
+def _default_azure_openai_client() -> ModelClient | None:
+    """An HTTP client bound to the Azure OpenAI v1 API, or None when unconfigured.
+
+    ``AZURE_OPENAI_ENDPOINT`` is the resource address
+    (``https://<resource>.openai.azure.com/``); the v1 path is appended here so
+    the setting is the value the Azure portal shows. One client per proposer,
+    shared across threads — httpx's client is safe for concurrent requests and
+    keeps one connection pool for the run.
+    """
+    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "").strip()
+    key = os.environ.get(API_KEY_ENV["azure_openai"], "")
+    if not endpoint or not key:
+        return None
+    try:
+        import httpx
+    except ImportError:
+        return None
+
+    base = endpoint.rstrip("/")
+    if not base.endswith("/openai/v1"):
+        base = f"{base}/openai/v1"
+    return httpx.Client(
+        base_url=f"{base}/",
+        headers={"api-key": key},
+        timeout=httpx.Timeout(60.0, connect=10.0),
+    )
+
+
+def _read_openai_proposal(payload: dict[str, Any]) -> Proposal | None:
+    """The forced function call's arguments, or None if there is no usable call.
+
+    The arguments arrive as a JSON STRING, not an object. A string that does not
+    parse is treated as no proposal — it escalates — rather than repaired:
+    guessing at a half-formed answer is the opposite of what validate is for.
+    """
+    choices = payload.get("choices") or []
+    if not choices:
+        return None
+    message = choices[0].get("message") or {}
+    for call in message.get("tool_calls") or []:
+        function = call.get("function") or {}
+        if function.get("name") != SUBMIT_RESOLUTION_NAME:
+            continue
+        try:
+            arguments = json.loads(function.get("arguments") or "")
+        except (TypeError, ValueError):
+            return None
+        if isinstance(arguments, dict):
+            return _proposal_from(arguments)
+    return None
 
 
 def _gemini_config(ruleset_block: str) -> ModelConfig:

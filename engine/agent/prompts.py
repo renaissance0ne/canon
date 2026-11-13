@@ -63,37 +63,77 @@ MODEL_RESOLUTION_GEMINI = "gemini-3.5-flash-lite"
 #: throughput argument above does not apply to one summary per escalation batch.
 MODEL_ESCALATION_SUMMARY_GEMINI = "gemini-3.5-flash"
 
+# Azure OpenAI. gpt-4.1-mini because it is the strongest small model that does
+# NOT reason before answering — the GPT-5 line and o-series bill a hidden
+# scratchpad, which is the same reason gemini-3.7-flash was rejected above — and
+# it supports strict, forced function calls.
+#
+# On Azure a request names a DEPLOYMENT, not a model: the deployment is what
+# maps to a model and a version, and it is what the run actually executed. So
+# the value pinned here is a deployment name, and it is named after the model
+# AND version it serves. A deployment called plain "gpt-4.1-mini" would be an
+# alias in all but name — exactly what the pinning rule forbids. Create it with
+# that version and with automatic version upgrades off.
+MODEL_RESOLUTION_AZURE_OPENAI = "gpt-4.1-mini-2025-04-14"
+
 #: Resolution model per provider. One mapping rather than a branch at each call
-#: site, so adding a third provider is a row here and a Proposer subclass.
+#: site, so adding a provider is a row here and a Proposer subclass.
 RESOLUTION_MODEL: dict[ModelProvider, str] = {
     "claude": MODEL_RESOLUTION,
     "gemini": MODEL_RESOLUTION_GEMINI,
+    "azure_openai": MODEL_RESOLUTION_AZURE_OPENAI,
 }
 
-#: The environment variable each provider's client reads. Named here so
+#: The environment variable holding each provider's key. Named here so
 #: ``/providers`` can report what this engine can actually call without holding
 #: a second, drifting copy of the list.
 API_KEY_ENV: dict[ModelProvider, str] = {
     "claude": "ANTHROPIC_API_KEY",
     "gemini": "GEMINI_API_KEY",
+    "azure_openai": "AZURE_OPENAI_API_KEY",
+}
+
+#: Everything a provider's client needs before it can make a call. A key alone
+#: does not reach Azure: the resource has its own address.
+REQUIRED_ENV: dict[ModelProvider, tuple[str, ...]] = {
+    "claude": (API_KEY_ENV["claude"],),
+    "gemini": (API_KEY_ENV["gemini"],),
+    "azure_openai": (API_KEY_ENV["azure_openai"], "AZURE_OPENAI_ENDPOINT"),
 }
 
 #: Overrides the resolution model per provider without a code change — useful
-#: when a free-tier quota pushes a deployment onto a different Flash revision.
+#: when a free-tier quota pushes a deployment onto a different Flash revision,
+#: or when an Azure resource's deployment is named differently.
 MODEL_ENV: dict[ModelProvider, str] = {
     "claude": "CANON_CLAUDE_MODEL",
     "gemini": "CANON_GEMINI_MODEL",
+    "azure_openai": "AZURE_OPENAI_DEPLOYMENT",
 }
 
 
 def resolution_model(provider: ModelProvider) -> str:
-    """The resolution model this engine will use for a provider."""
+    """The resolution model this engine will use for a provider.
+
+    For ``azure_openai`` this is the deployment name, because that is what a
+    request names and what the audit trail must record.
+    """
     return os.environ.get(MODEL_ENV[provider]) or RESOLUTION_MODEL[provider]
 
 
 def has_api_key(provider: ModelProvider) -> bool:
-    """Whether a key is present. Never returns, logs or compares the key itself."""
-    return bool(os.environ.get(API_KEY_ENV[provider]))
+    """Whether everything the provider's client needs is present.
+
+    Named for the common case — a key — but checks every required setting, so
+    an Azure key with no endpoint is reported as unconfigured rather than as a
+    provider that will fail on its first call. Never returns, logs or compares
+    a value.
+    """
+    return not missing_settings(provider)
+
+
+def missing_settings(provider: ModelProvider) -> list[str]:
+    """The required environment variables that are unset. Names only."""
+    return [name for name in REQUIRED_ENV[provider] if not os.environ.get(name)]
 
 #: The rationale is a product surface — a reviewer decides from it in five
 #: seconds. State which values disagreed, which rule or reasoning applied, and
@@ -173,6 +213,30 @@ def gemini_parameters_json_schema() -> dict[str, Any]:
                 } | {"anyOf": [{"type": member} for member in declared]}
 
     return schema
+
+
+def openai_function_tool() -> dict[str, Any]:
+    """``SUBMIT_RESOLUTION_TOOL`` as an OpenAI chat-completions function, strict.
+
+    DERIVED, never restated — same rule as the Gemini schema above. Strict mode
+    makes the service guarantee the arguments match the schema exactly, and it
+    asks for one addition: ``additionalProperties: false``. The schema already
+    lists every property as required and spells the one nullable field as a
+    type union, which is what strict mode expects.
+    """
+    schema = deepcopy(SUBMIT_RESOLUTION_TOOL["input_schema"])
+    assert isinstance(schema, dict)
+    schema["additionalProperties"] = False
+
+    return {
+        "type": "function",
+        "function": {
+            "name": SUBMIT_RESOLUTION_NAME,
+            "description": str(SUBMIT_RESOLUTION_TOOL["description"]),
+            "parameters": schema,
+            "strict": True,
+        },
+    }
 
 
 def build_ruleset_block(rules: list[SurvivorshipRule]) -> str:

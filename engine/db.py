@@ -35,7 +35,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, get_args
 from uuid import UUID
 
 import psycopg
@@ -137,7 +137,7 @@ def load_run_config(run_id: UUID) -> RunConfig:
         raise RunConfigError(f"No run {run_id}. The web layer creates the row before dispatching.")
 
     provider = row[3]
-    if provider not in ("claude", "gemini"):
+    if provider not in get_args(ModelProvider):
         raise RunConfigError(
             f"Run {run_id} names model provider {provider!r}, which this engine cannot "
             f"resolve with. The column is web-owned; see web/types/run.ts."

@@ -216,16 +216,19 @@ canon/
 
 ### Model Selection
 
-Canon resolves with **one of two model families**, chosen per run in the console
-and recorded on `runs.model_provider`. It is on the row for the same reason
-`rulesetId` is: a number produced by Gemini and a number produced by Claude are
-only comparable if the row says which one answered.
+Canon resolves with **one of three model families**, chosen per run in the
+console and recorded on `runs.model_provider`. It is on the row for the same
+reason `rulesetId` is: numbers produced by two different models are only
+comparable if the row says which one answered.
 
-| Step | Claude | Gemini | Why |
-|---|---|---|---|
-| Bulk candidate scoring | `claude-haiku-4-5` | `gemini-3.5-flash-lite` | High volume, low reasoning need |
-| Resolution proposal + rationale | `claude-sonnet-5` | `gemini-3.5-flash-lite` | See the throughput note below |
-| Escalation summary | `claude-sonnet-5` | `gemini-3.5-flash` | Human reads it; quality over cost |
+| Step | Claude | Gemini | Azure OpenAI | Why |
+|---|---|---|---|---|
+| Bulk candidate scoring | `claude-haiku-4-5` | `gemini-3.5-flash-lite` | — | High volume, low reasoning need |
+| Resolution proposal + rationale | `claude-sonnet-5` | `gemini-3.5-flash-lite` | `gpt-4.1-mini-2025-04-14` | See the notes below |
+| Escalation summary | `claude-sonnet-5` | `gemini-3.5-flash` | — | Human reads it; quality over cost |
+
+Only the resolution model is called today; the bulk and summary slots are
+reserved for steps not yet built.
 
 Model ids are **pinned, never aliased**. `gemini-flash-latest` would change what
 a run executed without anything in the repository changing — the same failure
@@ -242,17 +245,29 @@ decline. On a paid tier set `CANON_GEMINI_MODEL=gemini-3.5-flash` and the
 quality argument returns. If you do, re-check `RATE_CARDS` in
 `engine/eval/harness.py`: it is keyed by provider, not by model.
 
-Three rules hold across both providers, and `engine/agent/graph.py::ModelProposer`
-is where they live so the two cannot drift apart:
+**Azure OpenAI runs gpt-4.1-mini from the operator's own Azure resource**, over
+the v1 API with `httpx` (no SDK). It is the strongest small OpenAI model that
+does not reason before answering. On Azure a request names a *deployment*, not
+a model, so the pinned value is a deployment name — `gpt-4.1-mini-2025-04-14`,
+named after the model and version it serves and created with automatic version
+upgrades off. A deployment called plain `gpt-4.1-mini` would be an alias in all
+but name. Configure it with `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_API_KEY`;
+`AZURE_OPENAI_DEPLOYMENT` overrides the name.
+
+Three rules hold across every provider, and `engine/agent/graph.py::ModelProposer`
+is where they live so the providers cannot drift apart:
 
 1. **The model answers only through a forced tool call.** `tool_choice` on
-   Claude, `FunctionCallingConfigMode.ANY` on Gemini. A value recovered from
+   Claude, `FunctionCallingConfigMode.ANY` on Gemini, a named `tool_choice`
+   with a `strict` function on Azure OpenAI. A value recovered from
    prose cannot be compared against the observed values exactly enough for
    `validate` to mean anything.
 2. **Hidden reasoning is off.** `thinking: disabled` on Claude,
    `thinking_level: MINIMAL` on Gemini. The reasoning that matters is the
    rationale the reviewer reads, not a billed scratchpad. The Gemini control is
-   model-dependent — see the note on `MODEL_RESOLUTION_GEMINI`.
+   model-dependent — see the note on `MODEL_RESOLUTION_GEMINI`. On Azure OpenAI
+   the deployment is pinned to a non-reasoning model, so there is nothing to
+   switch off.
 3. **A run never falls back to the other provider.** A missing key degrades the
    run to the deterministic path and records why; it does not silently swap the
    model, which would attribute every metric to the wrong system.
@@ -261,7 +276,8 @@ Enable **prompt caching** on the ruleset block — it is identical across every
 call in a run and is the single largest cost lever. Claude caches it explicitly
 via `cache_control`; Gemini caches it implicitly by matching a stable prefix,
 which is earned by putting the ruleset in `system_instruction` and nothing
-per-conflict ahead of it. Use the **Batch API** for `engine/eval/` sweeps, which
+per-conflict ahead of it; Azure OpenAI does the same with the ruleset as the
+system message. Use the **Batch API** for `engine/eval/` sweeps, which
 are never latency-sensitive and cost half.
 
 Never call a model API from `web/`. All model calls happen inside the engine;
@@ -300,7 +316,7 @@ Implemented in `web/lib/db/schema.ts` (Drizzle). Generate and apply with
   sourceAId: uuid,              // FK sources.id — the CRM side
   sourceBId: uuid,              // FK sources.id — the warehouse side
   rulesetId: uuid,              // FK rulesets.id
-  modelProvider: text,          // "claude" | "gemini" — which model resolved this run
+  modelProvider: text,          // "claude" | "gemini" | "azure_openai" — which model resolved this run
   status: text,                 // "queued" | "extracting" | "matching" | "detecting" | "resolving" | "complete" | "failed"
   stats: jsonb,                 // { entitiesA, entitiesB, candidatePairs, matches, conflicts, autoResolved,
                                 //   escalated, tokensUsed, modelCalls, modelErrors, modelRateLimited }
@@ -509,7 +525,7 @@ truth for what a run actually executed, which breaks reproducibility.
 ```ts
 {
   providers: Array<{
-    provider: "claude" | "gemini";
+    provider: "claude" | "gemini" | "azure_openai";
     model: string;      // the resolution model this engine would actually use
     configured: boolean; // whether a key is PRESENT — never the key itself
   }>;
@@ -1173,6 +1189,7 @@ Use TypeScript strictly across `web/`.
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Engine `.env` only | `web/`, any client bundle |
 | `GEMINI_API_KEY` | Engine `.env` only | `web/`, any client bundle |
+| `AZURE_OPENAI_API_KEY` (+ `AZURE_OPENAI_ENDPOINT`) | Engine `.env` only | `web/`, any client bundle |
 | `CANON_CREDENTIAL_KEY` | Engine `.env` + `web/.env`, identical value | Any client bundle, `sources.config` |
 | Source credentials (tokens, passwords, keys, OAuth grants) | `source_credentials`, encrypted | Engine `.env`, `sources.config`, any read path |
 | OAuth **app** registrations (`*_OAUTH_CLIENT_ID` / `_SECRET`) | `web/.env` only | Engine `.env`, public env |

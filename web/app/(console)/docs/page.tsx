@@ -723,7 +723,8 @@ uv run python -m eval.generate --seed 42 --accounts 500 --out ./data/run42`}</Co
           [<Code key="1">DATABASE_URL</Code>, "The Postgres the web console uses. The engine writes only its own run output."],
           [<Code key="2">ANTHROPIC_API_KEY</Code>, "Enables Claude as a resolution model. Never set in the web console."],
           [<Code key="3">GEMINI_API_KEY</Code>, "Enables Gemini as a resolution model."],
-          [<Code key="4">CANON_CLAUDE_MODEL · CANON_GEMINI_MODEL</Code>, "Optional overrides for the pinned resolution models."],
+          [<Code key="3a">AZURE_OPENAI_ENDPOINT · AZURE_OPENAI_API_KEY</Code>, "Together, enable Azure OpenAI (gpt-4.1-mini) as a resolution model. The endpoint is the resource address the Azure portal shows."],
+          [<Code key="4">CANON_CLAUDE_MODEL · CANON_GEMINI_MODEL · AZURE_OPENAI_DEPLOYMENT</Code>, "Optional overrides for the pinned resolution models. On Azure the request names a deployment; name it after the model and version it serves."],
           [<Code key="5">CANON_MODEL_CONCURRENCY</Code>, "Conflicts sent to the model at once (default 4, max 16). The first rate limit drops a run to one at a time."],
           [<Code key="6">CANON_CREDENTIAL_KEY</Code>, "Decrypts stored source credentials. Must be identical in engine/.env and web/.env."],
           [<Code key="7">CANON_DATASET_ROOT</Code>, "Where generated datasets live (default ./data)."],
@@ -753,7 +754,7 @@ uv run python -m eval.generate --seed 42 --accounts 500 --out ./data/run42`}</Co
         and writes tables and figures to <Code>docs/results/</Code>.
       </Prose>
       <CodeBlock>{`cd engine
-uv run python -m eval.harness --seed 42 --provider gemini --systems all --report
+uv run python -m eval.harness --seed 42 --provider azure_openai --systems all --report
 uv run python -m eval.harness --seed 42 --quick      # the post-change check
 uv run python -m eval.harness --seed 42 --no-model   # deterministic path only`}</CodeBlock>
     </DocSection>

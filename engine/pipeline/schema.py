@@ -26,7 +26,12 @@ RuleStrategy = Literal["prefer_source", "most_recent", "most_complete", "escalat
 #: same reason `ruleset_id` is: two runs that disagree are only comparable if
 #: what produced each answer is on the record. Mirrored in
 #: web/types/run.ts::modelProviderSchema.
-ModelProvider = Literal["claude", "gemini"]
+#:
+#: ``azure_openai`` is OpenAI's model served from the operator's own Azure
+#: resource. It is its own provider rather than a flavour of anything else,
+#: because what answered — and on whose rate card — is the whole point of the
+#: column.
+ModelProvider = Literal["claude", "gemini", "azure_openai"]
 RunStatus = Literal[
     "queued", "extracting", "matching", "detecting", "resolving", "complete", "failed"
 ]

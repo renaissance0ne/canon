@@ -33,6 +33,10 @@ dependencies = [
     "langgraph>=1.2",
     "anthropic>=0.120",
     "google-genai>=1.33",
+    # Azure OpenAI is one POST over the v1 API, made with httpx rather than an
+    # SDK. Already in the lock through both SDKs above; declared directly
+    # because agent/graph.py imports it, for the same reason cryptography is.
+    "httpx>=0.28",
     # Owned-table writes
     "psycopg[binary]>=3.3",
     # AES-256-GCM for stored source credentials. Already present transitively

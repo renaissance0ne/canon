@@ -20,11 +20,12 @@ export const runStatusSchema = z.enum([
  * A run never falls back to the other provider — one that asked for Gemini and
  * silently got Claude would put a false statement on the row.
  */
-export const modelProviderSchema = z.enum(["claude", "gemini"]);
+export const modelProviderSchema = z.enum(["claude", "gemini", "azure_openai"]);
 
 export const MODEL_PROVIDER_LABEL: Record<ModelProvider, string> = {
   claude: "Claude",
   gemini: "Gemini",
+  azure_openai: "Azure OpenAI",
 };
 
 /**
@@ -32,7 +33,11 @@ export const MODEL_PROVIDER_LABEL: Record<ModelProvider, string> = {
  * provider is a deliberate decision about where it appears rather than a
  * side effect of alphabetical order.
  */
-export const MODEL_PROVIDERS = ["claude", "gemini"] as const satisfies readonly ModelProvider[];
+export const MODEL_PROVIDERS = [
+  "claude",
+  "gemini",
+  "azure_openai",
+] as const satisfies readonly ModelProvider[];
 
 export const runStatsSchema = z.object({
   entitiesA: z.number().int().nonnegative(),
