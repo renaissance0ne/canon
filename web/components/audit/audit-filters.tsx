@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
+import { AUDIT_ACTION_HELP } from "@/lib/glossary";
 import {
   AUDIT_ACTIONS,
   AUDIT_ACTION_LABEL,
@@ -47,6 +49,8 @@ export function AuditFilters({
           href={href(action)}
           active={active === action}
           count={byAction[action] ?? 0}
+          help={AUDIT_ACTION_HELP[action]}
+          tipId={`audit-action-${action}`}
         >
           {AUDIT_ACTION_LABEL[action]}
         </Chip>
@@ -59,17 +63,23 @@ function Chip({
   href,
   active,
   count,
+  help,
+  tipId,
   children,
 }: {
   href: string;
   active: boolean;
   count: number;
+  /** What this action records. Absent on "All actions", which needs no gloss. */
+  help?: string;
+  tipId?: string;
   children: React.ReactNode;
 }) {
-  return (
+  const link = (
     <Link
       href={href}
       aria-current={active ? "true" : undefined}
+      aria-describedby={help ? tipId : undefined}
       className={cn(
         "inline-flex h-7 items-center gap-1.5 rounded-[2px] border px-2 text-[11px] no-underline",
         "font-sans transition-colors duration-[80ms] ease-canon",
@@ -81,5 +91,13 @@ function Chip({
       {children}
       <span className="font-mono tabular-nums">{formatCount(count)}</span>
     </Link>
+  );
+
+  return help && tipId ? (
+    <Tooltip id={tipId} content={help} side="bottom">
+      {link}
+    </Tooltip>
+  ) : (
+    link
   );
 }

@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
 import { Label } from "@/components/ui/label";
+import { InfoTip } from "@/components/ui/tooltip";
 
 /**
  * Label · control · hint · error, stacked. Every form in the console is this
@@ -10,6 +11,7 @@ export function Field({
   label,
   htmlFor,
   hint,
+  tip,
   error,
   className,
   children,
@@ -17,6 +19,13 @@ export function Field({
   label: string;
   htmlFor: string;
   hint?: React.ReactNode;
+  /**
+   * A longer explanation behind a `?` beside the label — the concept, where
+   * `hint` is the one line a reader needs to fill the field in. Kept outside
+   * the <label>, because a button inside one would be a second labelable
+   * element and clicking it would focus the control instead.
+   */
+  tip?: string;
   error?: string;
   className?: string;
   children: React.ReactNode;
@@ -26,7 +35,14 @@ export function Field({
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <Label htmlFor={htmlFor}>{label}</Label>
+      {tip ? (
+        <span className="flex items-center gap-1">
+          <Label htmlFor={htmlFor}>{label}</Label>
+          <InfoTip label={`About ${label}`} content={tip} />
+        </span>
+      ) : (
+        <Label htmlFor={htmlFor}>{label}</Label>
+      )}
       {children}
       {hint ? (
         <p id={hintId} className="text-body text-g-500">

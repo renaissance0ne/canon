@@ -15,7 +15,11 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import traceback
+from collections.abc import AsyncIterator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
@@ -30,6 +34,7 @@ from agent.graph import (
     ModelUsage,
     build_proposer,
     missing_key_message,
+    model_concurrency,
     resolve,
 )
 from agent.prompts import API_KEY_ENV, has_api_key, resolution_model
@@ -41,7 +46,7 @@ from credentials import (
     mark_verified,
     refresh_oauth_token,
 )
-from pipeline.blocking import candidates, score_candidates
+from pipeline.blocking import candidates, score_candidates, warm_encoder
 from pipeline.credentials import requires_credentials
 from pipeline.detect import detect_detailed
 from pipeline.normalize import entity_uuid, normalize
@@ -69,7 +74,30 @@ load_dotenv()
 
 logger = logging.getLogger("canon.engine")
 
-app = FastAPI(title="Canon reconciliation engine", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Load the sentence encoder in the background as the engine starts.
+
+    Importing the embedding stack and reading the weights takes several
+    seconds, and without this the first run after every deploy or reload pays
+    it inside its match stage. A daemon thread rather than an awaited task: the
+    engine must accept requests immediately, and a machine with no weights
+    cached must not hold startup hostage to a download. A run that reaches the
+    match stage first simply waits on the same lock and reuses the result.
+    """
+    threading.Thread(target=_warm_encoder, name="canon-encoder-warmup", daemon=True).start()
+    yield
+
+
+def _warm_encoder() -> None:
+    if not warm_encoder():
+        logger.warning(
+            "sentence encoder unavailable; blocking will use the lexical fallback"
+        )
+
+
+app = FastAPI(title="Canon reconciliation engine", version="0.1.0", lifespan=lifespan)
 
 #: Every entity type Canon reconciles, in a fixed order so two runs over one
 #: dataset produce rows in the same order and are diffable.
@@ -265,8 +293,16 @@ def execute_run(run_id: UUID) -> RunStats:
         # ── extract + normalize ──────────────────────────────────────────────
         db.update_run_status(run_id, "extracting", stats=stats)
 
-        side_a = _extract_side(config.source_a_id, side="a")
-        side_b = _extract_side(config.source_b_id, side="b")
+        # Both sides at once. They are independent reads against two different
+        # systems, and against real connectors each is dominated by network
+        # wait — a Salesforce bulk query and a warehouse SELECT overlap almost
+        # perfectly. A failure on either side still raises here, out of
+        # `result()`, and reaches the run row like any other.
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="canon-extract") as pool:
+            future_a = pool.submit(_extract_side, config.source_a_id, side="a")
+            future_b = pool.submit(_extract_side, config.source_b_id, side="b")
+            side_a = future_a.result()
+            side_b = future_b.result()
 
         stats = stats.model_copy(
             update={"entities_a": len(side_a), "entities_b": len(side_b)}
@@ -327,6 +363,10 @@ def execute_run(run_id: UUID) -> RunStats:
             origins=detection.origins,
             proposer=proposer,
             labels=labels,
+            # Production proposers carry no call ceiling, so overlapping
+            # requests cannot change which conflicts the agent answers — only
+            # how long the run waits for them.
+            max_concurrency=model_concurrency(),
         )
         db.write_resolutions(resolutions)
 
@@ -494,7 +534,7 @@ def _audit_degradation(
         return
 
     logger.warning(
-        "run %s degraded: %d of %d model calls failed (provider=%s): %s",
+        "run %s degraded: %d of %d conflicts got no model answer (provider=%s): %s",
         run_id,
         usage.errors,
         usage.errors + usage.calls,

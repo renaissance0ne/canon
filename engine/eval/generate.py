@@ -1274,7 +1274,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         by_class[entry.conflict_class] = by_class.get(entry.conflict_class, 0) + 1
     escalations = sum(1 for entry in entries if entry.expected_resolution == ESCALATE)
 
-    print(f"seed {seed} · {accounts} accounts → {out_dir}")
+    # ASCII only: on Windows a redirected stdout is cp1252, which cannot encode
+    # an arrow, and the run would exit with an error after writing the dataset.
+    print(f"seed {seed} - {accounts} accounts -> {out_dir}")
     print(f"{len(entries)} injected divergences")
     for conflict_class in sorted(by_class):
         print(f"  {conflict_class:<12} {by_class[conflict_class]}")

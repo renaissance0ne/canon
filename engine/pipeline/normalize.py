@@ -11,6 +11,7 @@ cosmetic conflict is only detectable if both survive.
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Iterable
 from uuid import UUID, uuid5
 
@@ -18,21 +19,39 @@ from connectors.base import RawRecord
 from pipeline.schema import CanonicalEntity, EntityType
 
 #: Folded off the tail of a name before comparison. Recorded, never discarded.
+#:
+#: Popped repeatedly, so compound forms ("Pvt Ltd", "Private Limited",
+#: "Co. Ltd") fold one token at a time and need no entry of their own. Every
+#: entry is a legal form, never a word that can end a real trading name — the
+#: generator imports this list to keep its own names distinct after folding,
+#: and a common noun here would make two different companies fold together.
 LEGAL_SUFFIXES: tuple[str, ...] = (
     "inc",
+    "incorporated",
     "llc",
+    "llp",
+    "lp",
     "ltd",
     "limited",
+    "private",
     "corp",
     "corporation",
     "co",
+    "company",
     "gmbh",
     "pvt",
     "pvt ltd",
     "plc",
+    "pty",
+    "pte",
     "sa",
+    "sarl",
+    "srl",
+    "spa",
     "bv",
+    "nv",
     "ag",
+    "kk",
 )
 
 #: Keys every source hands back at the top level. Everything else on a record is
@@ -61,9 +80,25 @@ def fold_name(name: str) -> str:
     finer fold than ``eval/generate.py::_fold`` — which concatenates — so every
     pair the generator guaranteed distinct stays distinct here, and the result
     is still readable in the console and usable as a fuzzy-match input.
+
+    Two representation differences are folded before tokenizing, because real
+    CRMs and warehouses disagree on both constantly and neither changes what a
+    name refers to:
+
+    * **diacritics** — "Société Générale" and "Societe Generale" are one bank;
+      ETL pipelines that pass through a Latin-1 hop strip accents on one side;
+    * **standalone ampersands** — "Johnson & Johnson" and "Johnson and
+      Johnson". A bare "&" token would otherwise vanish as punctuation and fold
+      differently from the spelled-out word. An ampersand INSIDE a token is
+      left to the punctuation fold, so "AT&T" still folds to "att" alongside
+      "ATT".
     """
+    decomposed = unicodedata.normalize("NFKD", name)
+    unaccented = "".join(char for char in decomposed if not unicodedata.combining(char))
+
     tokens = [
-        "".join(char for char in token if char.isalnum()) for token in name.lower().split()
+        "and" if token == "&" else "".join(char for char in token if char.isalnum())
+        for token in unaccented.lower().split()
     ]
     tokens = [token for token in tokens if token]
 

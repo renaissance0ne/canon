@@ -31,10 +31,11 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Protocol, TypedDict, cast
 from uuid import UUID
 
@@ -99,6 +100,28 @@ MAX_RETRY_SECONDS = 60.0
 #: than a per-minute window is short, so one retry actually clears it.
 DEFAULT_RETRY_SECONDS = 20.0
 
+#: Conflicts resolved at once when the model is in play.
+#:
+#: A model call is a network round trip of a second or more, and the conflicts
+#: in a batch are independent, so resolving them one after another leaves the
+#: run idle for almost its entire resolve stage. Four in flight cuts that wall
+#: clock by roughly four on a paid tier while staying under every provider's
+#: default per-minute ceiling.
+#:
+#: It is not a fixed fan-out: the first rate limit a provider returns drops the
+#: proposer to one request at a time for the rest of the run (see
+#: `ModelProposer`), so a free-tier key degrades to exactly the serial
+#: behaviour it had before rather than burning its retries on a burst.
+DEFAULT_MODEL_CONCURRENCY = 4
+
+#: Overrides the fan-out without a code change. 1 restores strictly serial calls.
+MODEL_CONCURRENCY_ENV = "CANON_MODEL_CONCURRENCY"
+
+#: Never more than this, whatever the environment says. Past it the provider's
+#: rate limit, not the engine, sets the pace, and each extra thread is only
+#: another request queued to be throttled.
+MAX_MODEL_CONCURRENCY = 16
+
 #: Deliberately opaque aliases, named so the reason travels with them.
 #:
 #: The Anthropic and Google SDKs are both fully typed, but their request
@@ -116,6 +139,20 @@ CompiledGraph = Any
 def should_auto_apply(*, confidence: float, severity: int) -> bool:
     """The gate, in one place. Both conditions, never either."""
     return confidence >= AUTO_APPLY_CONFIDENCE_THRESHOLD and severity <= AUTO_APPLY_MAX_SEVERITY
+
+
+def model_concurrency() -> int:
+    """How many conflicts may be with the model at once, from the environment.
+
+    A malformed value falls back to the default rather than failing the run: a
+    typo in a tuning knob should cost wall-clock, not a reconciliation.
+    """
+    raw = os.environ.get(MODEL_CONCURRENCY_ENV, "")
+    try:
+        wanted = int(raw) if raw.strip() else DEFAULT_MODEL_CONCURRENCY
+    except ValueError:
+        wanted = DEFAULT_MODEL_CONCURRENCY
+    return min(max(wanted, 1), MAX_MODEL_CONCURRENCY)
 
 
 def select_rule(
@@ -254,6 +291,8 @@ class ModelUsage:
     #: does not say who produced it cannot be turned into a dollar figure.
     provider: ModelProvider = "claude"
     calls: int = 0
+    #: Conflicts that reached the proposer and got no answer: failed requests,
+    #: and conflicts skipped after an unrecoverable error halted the proposer.
     errors: int = 0
     #: Requests the provider throttled and that were retried. Reported
     #: separately from `errors` because a throttled call that later succeeded
@@ -326,6 +365,25 @@ class ModelProposer:
         self.attempts = 0
         self._ruleset_block = build_ruleset_block(rules)
         self._client: ModelClient | None = None
+        #: `resolve` may call one proposer from several threads. Every counter
+        #: above is read-modify-write, and a lost increment is a wrong number in
+        #: the run's stats — or a call ceiling that lets one extra request out.
+        self._lock = threading.Lock()
+        #: Set by the first rate limit. From then on requests go one at a time:
+        #: the provider has said how fast it wants to be asked, and fanning out
+        #: anyway would spend every retry on a burst it already refused.
+        self._serialized = False
+        self._request_lock = threading.Lock()
+        #: Set by the first failure that every later call would repeat — a
+        #: rejected key, a missing permission, an unknown model, an empty
+        #: credit balance. Asking again would spend the run's wall-clock
+        #: collecting the same error once per conflict.
+        self._halted = False
+
+    @property
+    def halted(self) -> bool:
+        """Whether an unrecoverable error stopped this proposer mid-run."""
+        return self._halted
 
     @property
     def available(self) -> bool:
@@ -343,7 +401,15 @@ class ModelProposer:
         #: Attempts, not successes. Counting only successes means a failing
         #: endpoint is retried once per conflict and the ceiling that exists to
         #: bound a run never trips.
-        if self.max_calls is not None and self.attempts >= self.max_calls:
+        if self._ceiling_reached():
+            return None
+        if self._halted:
+            #: Counted as an error although no request is sent. `errors` is
+            #: what the console subtracts from `escalated` to find the agent's
+            #: real judgements, and this conflict escalates with no answer
+            #: exactly as if the doomed call had been made.
+            with self._lock:
+                self.usage.errors += 1
             return None
 
         label_a, label_b = labels
@@ -362,11 +428,10 @@ class ModelProposer:
             #: another request against the same quota, and a ceiling that only
             #: counted first tries would let a throttled run exceed the bound it
             #: exists to enforce.
-            if self.max_calls is not None and self.attempts >= self.max_calls:
+            if not self._reserve_attempt():
                 return None
-            self.attempts += 1
             try:
-                return self._propose(client, block)
+                return self._request(client, block)
             except Exception as error:
                 #: A rate limit is not an outage — it is the provider saying
                 #: "later", and on a free tier it is the NORMAL response to a
@@ -379,15 +444,44 @@ class ModelProposer:
                     #: an outage must not quietly change what the system
                     #: decides. It is recorded rather than swallowed, so the run
                     #: reports the outage.
-                    self.usage.errors += 1
-                    if not self.usage.first_error:
-                        self.usage.first_error = f"{type(error).__name__}: {error}"
+                    with self._lock:
+                        self.usage.errors += 1
+                        if not self.usage.first_error:
+                            self.usage.first_error = f"{type(error).__name__}: {error}"
+                        if _is_unrecoverable(error):
+                            self._halted = True
                     return None
 
-                self.usage.rate_limited += 1
+                with self._lock:
+                    self.usage.rate_limited += 1
+                    self._serialized = True
                 time.sleep(_retry_after(error))
 
         return None  # unreachable: the loop always returns
+
+    def _ceiling_reached(self) -> bool:
+        with self._lock:
+            return self.max_calls is not None and self.attempts >= self.max_calls
+
+    def _reserve_attempt(self) -> bool:
+        """Claim one request against the ceiling, atomically.
+
+        Check-and-increment under one lock: two threads that each checked and
+        then incremented separately could both pass a ceiling with one slot
+        left.
+        """
+        with self._lock:
+            if self.max_calls is not None and self.attempts >= self.max_calls:
+                return False
+            self.attempts += 1
+            return True
+
+    def _request(self, client: ModelClient, block: str) -> Proposal | None:
+        """One physical request — serialized once the provider has throttled us."""
+        if self._serialized:
+            with self._request_lock:
+                return self._propose(client, block)
+        return self._propose(client, block)
 
     def _propose(self, client: ModelClient, block: str) -> Proposal | None:
         """Issue one request and read the forced tool call back out of it.
@@ -439,15 +533,18 @@ class ClaudeProposer(ModelProposer):
 
     def _record(self, message: ModelResponse) -> None:
         usage = getattr(message, "usage", None)
-        self.usage.calls += 1
-        if usage is None:
-            return
-        self.usage.input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
-        self.usage.output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
-        self.usage.cache_read_tokens += int(getattr(usage, "cache_read_input_tokens", 0) or 0)
-        self.usage.cache_write_tokens += int(
-            getattr(usage, "cache_creation_input_tokens", 0) or 0
-        )
+        with self._lock:
+            self.usage.calls += 1
+            if usage is None:
+                return
+            self.usage.input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
+            self.usage.output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
+            self.usage.cache_read_tokens += int(
+                getattr(usage, "cache_read_input_tokens", 0) or 0
+            )
+            self.usage.cache_write_tokens += int(
+                getattr(usage, "cache_creation_input_tokens", 0) or 0
+            )
 
 
 class GeminiProposer(ModelProposer):
@@ -499,26 +596,29 @@ class GeminiProposer(ModelProposer):
 
     def _record(self, response: ModelResponse) -> None:
         usage = getattr(response, "usage_metadata", None)
-        self.usage.calls += 1
-        if usage is None:
-            return
+        with self._lock:
+            self.usage.calls += 1
+            if usage is None:
+                return
 
-        #: Gemini's `prompt_token_count` INCLUDES the cached tokens, where
-        #: Anthropic's `input_tokens` excludes them. Subtracting here is what
-        #: keeps `ModelUsage.total_tokens` — which sums all four counters — from
-        #: billing the cached prefix twice on every call, and keeps the two
-        #: providers' cost lines comparable in the results table.
-        prompt = int(getattr(usage, "prompt_token_count", 0) or 0)
-        cached = int(getattr(usage, "cached_content_token_count", 0) or 0)
-        self.usage.cache_read_tokens += cached
-        self.usage.input_tokens += max(prompt - cached, 0)
+            #: Gemini's `prompt_token_count` INCLUDES the cached tokens, where
+            #: Anthropic's `input_tokens` excludes them. Subtracting here is
+            #: what keeps `ModelUsage.total_tokens` — which sums all four
+            #: counters — from billing the cached prefix twice on every call,
+            #: and keeps the two providers' cost lines comparable in the
+            #: results table.
+            prompt = int(getattr(usage, "prompt_token_count", 0) or 0)
+            cached = int(getattr(usage, "cached_content_token_count", 0) or 0)
+            self.usage.cache_read_tokens += cached
+            self.usage.input_tokens += max(prompt - cached, 0)
 
-        #: Thoughts are billed as output and are disabled above, so this is
-        #: normally zero. Counted anyway: a model revision that ignores the
-        #: budget should show up as cost, not vanish from the total.
-        self.usage.output_tokens += int(getattr(usage, "candidates_token_count", 0) or 0)
-        self.usage.output_tokens += int(getattr(usage, "thoughts_token_count", 0) or 0)
-        #: Implicit caching has no write charge, so `cache_write_tokens` stays 0.
+            #: Thoughts are billed as output and are disabled above, so this is
+            #: normally zero. Counted anyway: a model revision that ignores the
+            #: budget should show up as cost, not vanish from the total.
+            self.usage.output_tokens += int(getattr(usage, "candidates_token_count", 0) or 0)
+            self.usage.output_tokens += int(getattr(usage, "thoughts_token_count", 0) or 0)
+            #: Implicit caching has no write charge, so `cache_write_tokens`
+            #: stays 0.
 
 
 #: Every provider Canon can resolve with, by name.
@@ -666,6 +766,30 @@ def _is_rate_limited(error: Exception) -> bool:
         if getattr(error, attribute, None) == 429:
             return True
     return "RESOURCE_EXHAUSTED" in str(error) or "429" in str(error)
+
+
+#: HTTP statuses that mean the same request will fail again on every conflict:
+#: the key is wrong, the key lacks access, or the model id does not exist.
+_UNRECOVERABLE_STATUSES = frozenset({401, 403, 404})
+
+#: The same verdict, for providers that report it in the body of a 400 rather
+#: than in the status — Anthropic's exhausted credit balance, Gemini's invalid
+#: key and permission errors.
+_UNRECOVERABLE_MARKERS = ("credit balance", "API_KEY_INVALID", "PERMISSION_DENIED")
+
+
+def _is_unrecoverable(error: Exception) -> bool:
+    """Whether a failure is a property of the run's configuration, not the call.
+
+    Duck-typed for the same reasons as ``_is_rate_limited``. Deliberately
+    narrow: anything not listed here — a 400 on one malformed conflict, a 500, a
+    timeout — fails that conflict alone and the next one is still asked.
+    """
+    for attribute in ("status_code", "code"):
+        if getattr(error, attribute, None) in _UNRECOVERABLE_STATUSES:
+            return True
+    text = str(error)
+    return any(marker in text for marker in _UNRECOVERABLE_MARKERS)
 
 
 def _retry_after(error: Exception) -> float:
@@ -929,6 +1053,7 @@ def resolve(
     proposer: Proposer | None = None,
     labels: tuple[str, str] = DEFAULT_LABELS,
     skip_validate: bool = False,
+    max_concurrency: int = 1,
 ) -> list[Resolution]:
     """Run a batch of conflicts through the graph.
 
@@ -936,46 +1061,62 @@ def resolve(
     measures what the validate node is worth. It is never set in production, and
     the harness reports it as a separate system rather than folding it into the
     headline numbers.
+
+    ``max_concurrency`` above 1 runs that many conflicts through the graph at
+    once, and only matters when there is a proposer — the deterministic nodes
+    are pure Python, so without a network call to overlap, threads would add
+    overhead and save nothing. Each conflict's journey is independent of every
+    other's, so the resolutions are identical to a serial run and come back in
+    input order. The one thing concurrency could make nondeterministic is WHICH
+    conflicts a call ceiling spends its budget on, so a capped proposer is the
+    caller's cue to stay at 1 — the harness does exactly that.
     """
-    graph = build_graph(proposer=proposer) if not skip_validate else None
-    resolutions: list[Resolution] = []
+    if skip_validate:
+        return [
+            _resolve_without_validate(conflict, rules, _origin(conflict, origins), proposer, labels)
+            for conflict in conflicts
+        ]
 
-    for conflict in conflicts:
-        origin = origins.get(conflict.id) if origins and conflict.id is not None else None
+    graph = build_graph(proposer=proposer)
+    inputs: list[ResolutionState] = [
+        {
+            "conflict": conflict,
+            "origin": _origin(conflict, origins),
+            "rules": rules,
+            "labels": labels,
+            "proposed_value": "",
+            "rationale": "",
+            "confidence": 0.0,
+            "applied_rule_id": None,
+            "escalation_reason": "",
+        }
+        for conflict in conflicts
+    ]
 
-        if skip_validate:
-            resolutions.append(
-                _resolve_without_validate(conflict, rules, origin, proposer, labels)
-            )
-            continue
-
-        assert graph is not None
-        final = graph.invoke(
-            {
-                "conflict": conflict,
-                "origin": origin,
-                "rules": rules,
-                "labels": labels,
-                "proposed_value": "",
-                "rationale": "",
-                "confidence": 0.0,
-                "applied_rule_id": None,
-                "escalation_reason": "",
-            }
+    if proposer is not None and max_concurrency > 1 and len(inputs) > 1:
+        finals: list[ResolutionState] = graph.batch(
+            inputs, config={"max_concurrency": max_concurrency}
         )
+    else:
+        finals = [graph.invoke(state) for state in inputs]
 
-        resolutions.append(
-            Resolution(
-                conflict_id=_conflict_id(conflict),
-                proposed_value=final.get("proposed_value", ""),
-                rationale=final.get("rationale", ""),
-                applied_rule_id=final.get("applied_rule_id"),
-                confidence=final.get("confidence", 0.0),
-                status=final.get("status", "escalated"),
-            )
+    return [
+        Resolution(
+            conflict_id=_conflict_id(conflict),
+            proposed_value=final.get("proposed_value", ""),
+            rationale=final.get("rationale", ""),
+            applied_rule_id=final.get("applied_rule_id"),
+            confidence=final.get("confidence", 0.0),
+            status=final.get("status", "escalated"),
         )
+        for conflict, final in zip(conflicts, finals, strict=True)
+    ]
 
-    return resolutions
+
+def _origin(
+    conflict: Conflict, origins: dict[UUID, ConflictOrigin] | None
+) -> ConflictOrigin | None:
+    return origins.get(conflict.id) if origins and conflict.id is not None else None
 
 
 def _resolve_without_validate(
@@ -1062,12 +1203,22 @@ def _conflict_id(conflict: Conflict) -> UUID:
 
 
 def _parse_timestamp(value: str | None) -> datetime | None:
+    """ISO 8601 → an AWARE datetime, or None.
+
+    Naive input is read as UTC, the same reading ``db._timestamp`` gives it when
+    the entity row is written. Returning it naive would make ``most_recent``
+    raise the moment one source stamps an offset and the other does not —
+    Salesforce always sends one, and a warehouse column typed TIMESTAMP_NTZ
+    never does — and that TypeError would fail the whole run rather than one
+    comparison.
+    """
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 def _short_date(origin: ConflictOrigin | None, *, side: str) -> str:

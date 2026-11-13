@@ -7,16 +7,21 @@ import { CanonLockup } from "@/components/canon-mark";
 import { SignOutControl } from "@/components/auth/sign-out-control";
 import { ThemedUserButton } from "@/components/auth/themed-clerk";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
+import { NAV_HELP } from "@/lib/glossary";
 import { reviewerLabel } from "@/lib/reviewer-label";
 
 const NAV = [
-  { href: "/runs", label: "Runs" },
-  { href: "/conflicts", label: "Conflicts" },
-  { href: "/sources", label: "Sources" },
-  { href: "/rules", label: "Rules" },
-  { href: "/audit", label: "Audit" },
+  { href: "/runs", label: "Runs", help: NAV_HELP.runs },
+  { href: "/conflicts", label: "Conflicts", help: NAV_HELP.conflicts },
+  { href: "/sources", label: "Sources", help: NAV_HELP.sources },
+  { href: "/rules", label: "Rules", help: NAV_HELP.rules },
+  { href: "/audit", label: "Audit", help: NAV_HELP.audit },
 ] as const;
+
+/** Set apart from the work: the guide is where you go to learn the five above. */
+const DOCS = { href: "/docs", label: "Docs", help: NAV_HELP.docs } as const;
 
 /**
  * Fixed 240px rail, hairline-separated. No pills, no active fills — weight and
@@ -34,26 +39,17 @@ export function NavRail() {
       </Link>
 
       <ul className="flex flex-col gap-0.5">
-        {NAV.map((item) => {
-          const active = pathname.startsWith(item.href);
-          return (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "-ml-3 flex h-8 items-center border-l-2 pl-3 no-underline",
-                  "font-sans text-label uppercase transition-colors duration-[80ms] ease-canon",
-                  active
-                    ? "border-g-900 font-semibold text-g-900"
-                    : "border-transparent text-g-500 hover:text-g-900",
-                )}
-              >
-                {item.label}
-              </Link>
-            </li>
-          );
-        })}
+        {NAV.map((item) => (
+          <li key={item.href}>
+            <NavLink item={item} active={pathname.startsWith(item.href)} />
+          </li>
+        ))}
+      </ul>
+
+      <ul className="mt-6 flex flex-col gap-0.5 border-t border-hairline pt-4">
+        <li>
+          <NavLink item={DOCS} active={pathname.startsWith(DOCS.href)} />
+        </li>
       </ul>
 
       {/* Who is about to approve something. A reviewer working a queue needs to
@@ -87,5 +83,39 @@ export function NavRail() {
         </p>
       </div>
     </nav>
+  );
+}
+
+/**
+ * One rail entry. The tooltip opens to the right, over the page, so it never
+ * covers the next entry down; a reader tabbing the rail gets the same line a
+ * mouse user does.
+ */
+function NavLink({
+  item,
+  active,
+}: {
+  item: { href: string; label: string; help: string };
+  active: boolean;
+}) {
+  const tipId = `nav-tip-${item.href.slice(1)}`;
+
+  return (
+    <Tooltip id={tipId} content={item.help} side="right" className="flex">
+      <Link
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        aria-describedby={tipId}
+        className={cn(
+          "-ml-3 flex h-8 flex-1 items-center border-l-2 pl-3 no-underline",
+          "font-sans text-label uppercase transition-colors duration-[80ms] ease-canon",
+          active
+            ? "border-g-900 font-semibold text-g-900"
+            : "border-transparent text-g-500 hover:text-g-900",
+        )}
+      >
+        {item.label}
+      </Link>
+    </Tooltip>
   );
 }

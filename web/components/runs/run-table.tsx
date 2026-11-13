@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Term } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
+import { STAT_HELP, TERM_HELP } from "@/lib/glossary";
 import { formatCount, formatElapsed, formatTimestamp, shortRunId } from "@/lib/format";
 import {
   MODEL_PROVIDER_LABEL,
@@ -21,12 +23,22 @@ export function RunTable({ runs }: { runs: RunDetail[] }) {
       <thead>
         <tr className="border-b border-hairline-strong text-left">
           <Th>Run</Th>
-          <Th>Status</Th>
+          <Th>
+            <Term content={RUN_STATUS_HELP}>Status</Term>
+          </Th>
           <Th>Sources</Th>
-          <Th>Ruleset</Th>
-          <Th>Model</Th>
-          <Th className="text-right">Conflicts</Th>
-          <Th className="text-right">Escalated</Th>
+          <Th>
+            <Term content={TERM_HELP.ruleset.text}>Ruleset</Term>
+          </Th>
+          <Th>
+            <Term content={TERM_HELP.modelProvider.text}>Model</Term>
+          </Th>
+          <Th className="text-right">
+            <Term content={STAT_HELP.conflicts}>Conflicts</Term>
+          </Th>
+          <Th className="text-right">
+            <Term content={STAT_HELP.escalated}>Escalated</Term>
+          </Th>
           <Th>Started</Th>
           <Th className="text-right">Duration</Th>
         </tr>
@@ -84,6 +96,11 @@ export function RunTable({ runs }: { runs: RunDetail[] }) {
     </table>
   );
 }
+
+/** What the status column can say, in the order a run passes through it. */
+const RUN_STATUS_HELP =
+  "Where the run is: queued, extracting, matching, detecting, resolving, then complete. " +
+  "Failed replaces whichever stage was running when it stopped.";
 
 function Th({ children, className }: { children: React.ReactNode; className?: string }) {
   return (

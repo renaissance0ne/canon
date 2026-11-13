@@ -68,6 +68,11 @@ export default async function GetStartedPage() {
               Use synthetic dataset
             </Link>
           </Button>
+          <Button asChild variant="ghost" size="lg">
+            <Link href="/docs#quick-start" className="no-underline">
+              Read the guide
+            </Link>
+          </Button>
           <p className="font-mono text-value text-g-500">seed 42 · 512 entities</p>
         </div>
 

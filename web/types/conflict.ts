@@ -43,10 +43,20 @@ export const matchMethodSchema = z.enum([
   "orphan",
 ]);
 
+/**
+ * What a match's confidence was computed from. Mirrors
+ * engine/pipeline/schema.py::MatchSignals.
+ *
+ * `fuzzyRatio` and `fieldAgreement` are both 0..1. `fieldAgreement` is the
+ * fraction of fields both records populate that agree; it is null when too few
+ * are comparable to count as evidence, and absent on match rows written before
+ * the engine reported it.
+ */
 export const matchSignalsSchema = z.object({
   exactKey: z.boolean(),
   cosine: z.number(),
   fuzzyRatio: z.number(),
+  fieldAgreement: z.number().nullable().optional(),
 });
 
 export const conflictSchema = z.object({

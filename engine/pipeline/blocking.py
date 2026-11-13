@@ -5,11 +5,30 @@ that is the difference between a 500-account demo and a 50,000-account org.
 
 Order matters: exact key first (external id, then domain, then normalized
 name), and only what is left over goes through embeddings.
+
+Two kinds of evidence decide a match that no exact key settles:
+
+* **the name** — RapidFuzz and cosine similarity over the folded name;
+* **the fields** — how many of the fields both records populate agree. A name
+  is a label two companies can share; a parent, a territory, an owner and a
+  segment all agreeing is what makes two records the same account. AGENTS.md
+  names this signal ("RapidFuzz + cosine + field-agreement signals combine
+  into a confidence"), and without it the matcher pairs any orphan with the
+  nearest similarly-named stranger — which turns a missing record into a false
+  duplicate and invents a page of field conflicts besides.
+
+One identity check sits outside the confidence entirely: names that differ in
+an identifying number ("Store 101" / "Store 102", "Northwind Foods 791" /
+"Northwind Foods 1631") are different entities, however well everything else
+lines up. Sibling stores share a parent, a territory and an owner, so field
+agreement cannot catch them; the number is the one token that says which is
+which.
 """
 
 from __future__ import annotations
 
 import functools
+import threading
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import partial
@@ -18,7 +37,7 @@ from uuid import UUID, uuid5
 
 from rapidfuzz import fuzz, process
 
-from pipeline.normalize import CANON_NAMESPACE, entity_uuid
+from pipeline.normalize import CANON_NAMESPACE, entity_uuid, fold_name
 from pipeline.schema import CanonicalEntity, EntityType, Match, MatchMethod, MatchSignals
 
 #: Neighbours retrieved per unmatched entity from the FAISS index.
@@ -27,27 +46,59 @@ TOP_K = 10
 #: Below this, a candidate pair is not worth scoring.
 MIN_MATCH_CONFIDENCE = 0.50
 
-#: A pair with no external-id agreement has only its name as evidence, so the
-#: bar is near-identity. Set low, this is the single largest source of false
-#: matches in the whole pipeline: two real accounts called "Northwind Traders"
-#: and "Northwind Systems" score around 0.62 on a token ratio, and believing
-#: that pair would both invent a page of field conflicts and destroy the orphan
-#: detection for the record that genuinely has no counterpart.
+#: A pair with no external-id agreement has only its name and its fields as
+#: evidence, so the bar is near-identity. Set low, this is the single largest
+#: source of false matches in the whole pipeline: two real accounts called
+#: "Northwind Traders" and "Northwind Systems" score around 0.62 on a token
+#: ratio, and believing that pair would both invent a page of field conflicts
+#: and destroy the orphan detection for the record that genuinely has no
+#: counterpart.
 MIN_NAME_MATCH_CONFIDENCE = 0.92
 
-#: Weights for the lexical and semantic signals when no exact key agreed. They
-#: are named because eval/ sweeps them: a magic 0.55 buried in an expression is
-#: a number nobody can defend in the results chapter.
+#: Weights for the lexical and semantic signals within the NAME score. They are
+#: named because eval/ sweeps them: a magic 0.55 buried in an expression is a
+#: number nobody can defend in the results chapter.
 FUZZY_WEIGHT = 0.55
 COSINE_WEIGHT = 0.45
+
+#: How the name score and field agreement combine when agreement is known.
+#:
+#: Agreement is the minority weight on purpose. It is there to separate two
+#: similarly-named records, not to pair two differently-named ones — at 0.2 a
+#: perfect agreement can lift a name score of 0.90 over the 0.92 bar, and no
+#: amount of agreement rescues a name below that. Conversely an exact
+#: normalized-name pair needs at least 60% of its shared fields to agree, which
+#: is what stops "ABC Plumbing" in two different cities from being called a
+#: duplicate.
+NAME_EVIDENCE_WEIGHT = 0.80
+FIELD_AGREEMENT_WEIGHT = 0.20
+
+#: Fewer comparable fields than this and agreement is not evidence. One shared
+#: field agreeing is a coin flip on a four-value segment column.
+MIN_COMPARABLE_FIELDS = 2
 
 #: Small, fast, and good enough for company and person names — the blocking
 #: stage only has to get the true pair into the top k, not rank it first.
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
-#: Fuzzy floor for a name-only candidate. Below this the pair is noise and
-#: scoring it wastes the budget blocking exists to protect.
+#: Names per forward pass. Measured on CPU: 128 encodes ~1.5x faster than the
+#: library default of 32, and larger batches gain nothing further.
+EMBEDDING_BATCH_SIZE = 128
+
+#: Vectors kept per process, keyed by folded name. A rerun over the same
+#: sources — the harness scores four systems over one dataset, and the console
+#: re-runs a pair of sources under a new ruleset — then skips the encoder
+#: entirely. Bounded because the engine is long-lived: 384 floats a name puts
+#: the ceiling near 75 MB, and the cache is simply dropped when it would pass it.
+_VECTOR_CACHE_LIMIT = 50_000
+
+#: Fuzzy floor for a name-only candidate in the lexical fallback. Below this the
+#: pair is noise and scoring it wastes the budget blocking exists to protect.
 _FUZZY_CANDIDATE_FLOOR = 70.0
+
+#: Cells per `cdist` block in the lexical canopy — bounds its memory at ~20 MB
+#: however large the two sides get.
+_CANOPY_BLOCK_CELLS = 20_000_000
 
 
 @dataclass(frozen=True)
@@ -155,7 +206,7 @@ def candidates(
 
 
 def score(a: CanonicalEntity, b: CanonicalEntity, *, cosine: float = 0.0) -> MatchSignals:
-    """RapidFuzz ratio, cosine similarity and exact-key agreement.
+    """RapidFuzz ratio, cosine similarity, exact-key and field agreement.
 
     ``cosine`` is supplied by the blocking pass that produced the pair rather
     than recomputed here: embedding a pair on demand would put a model call
@@ -165,7 +216,76 @@ def score(a: CanonicalEntity, b: CanonicalEntity, *, cosine: float = 0.0) -> Mat
         exact_key=a.external_id == b.external_id,
         cosine=cosine,
         fuzzy_ratio=fuzz.token_sort_ratio(a.normalized_name, b.normalized_name) / 100.0,
+        field_agreement=field_agreement(a, b),
     )
+
+
+def field_agreement(a: CanonicalEntity, b: CanonicalEntity) -> float | None:
+    """Of the fields both records populate, the fraction that agree.
+
+    Only fields present on BOTH sides count. A field one system leaves empty is
+    a disagreement for ``detect`` to report, but it is not evidence that the two
+    records are different things — a warehouse that never loaded ``industry``
+    has said nothing about which account a row is.
+
+    Values compare after the same fold detection uses, so a territory spelled
+    "APAC-South" on one side and "apac-south" on the other agrees here exactly
+    as it would be classified cosmetic there.
+
+    The name is excluded: it is the other half of the evidence, scored
+    separately, and counting it twice would let a shared label outvote every
+    field that says otherwise.
+    """
+    pairs: list[tuple[str, str]] = []
+    if a.parent_external_id and b.parent_external_id:
+        pairs.append((a.parent_external_id, b.parent_external_id))
+
+    for key in sorted(a.attributes.keys() & b.attributes.keys()):
+        value_a = a.attributes[key]
+        value_b = b.attributes[key]
+        if value_a and value_b:
+            pairs.append((value_a, value_b))
+
+    if len(pairs) < MIN_COMPARABLE_FIELDS:
+        return None
+
+    agreeing = sum(
+        1
+        for value_a, value_b in pairs
+        if value_a == value_b or fold_name(value_a) == fold_name(value_b)
+    )
+    return agreeing / len(pairs)
+
+
+def identifying_numbers_disagree(a: CanonicalEntity, b: CanonicalEntity) -> bool:
+    """Whether both names carry numbers, and not the same ones.
+
+    "Store 101" and "Store 102" are one character apart and score 0.97 on any
+    string metric; they are also two stores. A number in a name is almost
+    always the part that identifies it — a store, a branch, a region, a
+    franchise — so two names whose numeric tokens differ are treated as naming
+    different things.
+
+    Only when BOTH carry one. "Acme Holdings 2019" against "Acme Holdings" is a
+    renamed or annotated record as often as it is a different one, and that
+    call is left to the rest of the evidence.
+    """
+    numbers_a = _numeric_tokens(a.normalized_name)
+    numbers_b = _numeric_tokens(b.normalized_name)
+    return bool(numbers_a) and bool(numbers_b) and numbers_a != numbers_b
+
+
+def name_score(signals: MatchSignals) -> float:
+    """The lexical and semantic evidence alone, in 0..1.
+
+    When no embedding backend is available ``cosine`` is 0.0, and the lexical
+    signal stands alone rather than being halved by a semantic score that was
+    never computed. That is a documented degradation, not a silent one: the
+    harness reports which backend produced a run's numbers.
+    """
+    if signals.cosine <= 0.0:
+        return signals.fuzzy_ratio
+    return FUZZY_WEIGHT * signals.fuzzy_ratio + COSINE_WEIGHT * signals.cosine
 
 
 def combine(signals: MatchSignals) -> float:
@@ -175,16 +295,40 @@ def combine(signals: MatchSignals) -> float:
     to 1.0 rather than being averaged down by a name that happens to have been
     edited on one side.
 
-    When no embedding backend is available ``cosine`` is 0.0, and the lexical
-    signal stands alone rather than being halved by a semantic score that was
-    never computed. That is a documented degradation, not a silent one: the
-    harness reports which backend produced a run's numbers.
+    Otherwise the name score stands alone when field agreement is unknown, and
+    blends with it when it is known. See ``NAME_EVIDENCE_WEIGHT``.
     """
     if signals.exact_key:
         return 1.0
-    if signals.cosine <= 0.0:
-        return signals.fuzzy_ratio
-    return FUZZY_WEIGHT * signals.fuzzy_ratio + COSINE_WEIGHT * signals.cosine
+    name = name_score(signals)
+    if signals.field_agreement is None:
+        return name
+    return NAME_EVIDENCE_WEIGHT * name + FIELD_AGREEMENT_WEIGHT * signals.field_agreement
+
+
+def name_match_fuzzy_floor() -> float:
+    """The lowest fuzzy ratio at which a name-only pair can still be matched.
+
+    Assumes everything else is perfect — cosine 1.0 and every field agreeing —
+    so ANY pair below this ratio fails ``MIN_NAME_MATCH_CONFIDENCE`` whatever
+    its other signals. That is what makes the lexical canopy lossless: pruning
+    below this floor removes only pairs ``score_candidates`` would reject.
+
+    Derived from the constants rather than restated, because eval/ sweeps them
+    and a floor that did not move with them would silently start discarding
+    pairs the swept weights would have accepted.
+    """
+    # Best case with known agreement: NAME * (FUZZY*f + COSINE) + AGREEMENT >= MIN
+    with_agreement = (
+        (MIN_NAME_MATCH_CONFIDENCE - FIELD_AGREEMENT_WEIGHT) / NAME_EVIDENCE_WEIGHT
+        - COSINE_WEIGHT
+    ) / FUZZY_WEIGHT
+    # Best case with agreement unknown: FUZZY*f + COSINE >= MIN
+    without_agreement = (MIN_NAME_MATCH_CONFIDENCE - COSINE_WEIGHT) / FUZZY_WEIGHT
+    floor = min(with_agreement, without_agreement)
+    # A hair under, so float rounding at the boundary never prunes a pair the
+    # scorer would have accepted.
+    return min(max(floor - 0.005, 0.0), 1.0)
 
 
 def match(
@@ -212,8 +356,11 @@ def score_candidates(found: list[Candidate], *, run_id: UUID) -> list[Match]:
 
     for candidate in found:
         signals = score(candidate.a, candidate.b, cosine=candidate.cosine)
-        confidence = combine(signals)
 
+        if not signals.exact_key and identifying_numbers_disagree(candidate.a, candidate.b):
+            continue
+
+        confidence = combine(signals)
         floor = MIN_MATCH_CONFIDENCE if signals.exact_key else MIN_NAME_MATCH_CONFIDENCE
         if confidence < floor:
             continue
@@ -237,6 +384,15 @@ def score_candidates(found: list[Candidate], *, run_id: UUID) -> list[Match]:
         )
 
     return matches
+
+
+def warm_encoder() -> bool:
+    """Load the sentence encoder now rather than on the first run's match stage.
+
+    Called from a background thread at engine startup. Returns whether an
+    encoder is available, which is all a caller needs to log.
+    """
+    return _encoder() is not None
 
 
 # ── internals ────────────────────────────────────────────────────────────────
@@ -263,6 +419,10 @@ def _index_by_name(entities: list[CanonicalEntity]) -> dict[str, list[CanonicalE
     for entity in entities:
         index.setdefault(entity.normalized_name, []).append(entity)
     return index
+
+
+def _numeric_tokens(normalized_name: str) -> frozenset[str]:
+    return frozenset(token for token in normalized_name.split() if any(c.isdigit() for c in token))
 
 
 def _add(
@@ -294,15 +454,62 @@ def _neighbours(
     *,
     top_k: int,
 ) -> list[Candidate]:
-    """Top-k nearest neighbours for each query, embeddings first."""
+    """Top-k nearest neighbours for each query, embeddings first.
+
+    The pool is first cut down to its lexical canopy — the members close enough
+    in spelling to SOME query that they could ever clear the match bar. On a
+    20,000-account org that is a few thousand records instead of all of them,
+    and the encoder, which is the most expensive thing in the stage, only ever
+    sees those.
+    """
     if not queries or not pool:
         return []
 
-    embedded = _embedding_neighbours(queries, pool, top_k=top_k)
+    canopy = _lexical_canopy(queries, pool)
+    if not canopy:
+        return []
+
+    embedded = _embedding_neighbours(queries, canopy, top_k=top_k)
     if embedded is not None:
         return embedded
 
-    return _fuzzy_neighbours(queries, pool, top_k=top_k)
+    return _fuzzy_neighbours(queries, canopy, top_k=top_k)
+
+
+def _lexical_canopy(
+    queries: list[CanonicalEntity], pool: list[CanonicalEntity]
+) -> list[CanonicalEntity]:
+    """Pool members within ``name_match_fuzzy_floor`` of at least one query.
+
+    Lossless with respect to the final matches, not an approximation: a pair
+    below the floor fails the match bar however perfect its cosine and field
+    agreement (see ``name_match_fuzzy_floor``), and a pair above it can only
+    rank HIGHER among a smaller pool, so every pair that could have matched
+    from the full pool's top-k is still in the canopy's top-k.
+
+    `cdist` runs the comparison in native code across every core, in blocks so
+    its score matrix stays small however large the sides get. Pool order is
+    preserved, which keeps FAISS tie-breaking — and so the run — deterministic.
+    """
+    cutoff = name_match_fuzzy_floor() * 100.0
+    query_names = [entity.normalized_name for entity in queries]
+    pool_names = [entity.normalized_name for entity in pool]
+
+    rows_per_block = max(1, _CANOPY_BLOCK_CELLS // max(len(pool_names), 1))
+    keep: set[int] = set()
+
+    for start in range(0, len(query_names), rows_per_block):
+        scores: Any = process.cdist(
+            query_names[start : start + rows_per_block],
+            pool_names,
+            scorer=fuzz.token_sort_ratio,
+            score_cutoff=cutoff,
+            dtype="uint8",
+            workers=-1,
+        )
+        keep.update(int(column) for column in scores.any(axis=0).nonzero()[0])
+
+    return [entity for position, entity in enumerate(pool) if position in keep]
 
 
 def _embedding_neighbours(
@@ -320,30 +527,13 @@ def _embedding_neighbours(
     """
     try:
         import faiss
-        import numpy as np
     except Exception:
         return None
 
-    model = _load_encoder()
-    if model is None:
+    pool_array = _embed([entity.normalized_name for entity in pool])
+    query_array = _embed([entity.normalized_name for entity in queries])
+    if pool_array is None or query_array is None:
         return None
-
-    try:
-        pool_vectors = model.encode(
-            [entity.normalized_name for entity in pool],
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        )
-        query_vectors = model.encode(
-            [entity.normalized_name for entity in queries],
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        )
-    except Exception:
-        return None
-
-    pool_array: Any = np.asarray(pool_vectors, dtype="float32")
-    query_array: Any = np.asarray(query_vectors, dtype="float32")
 
     # Vectors are L2-normalized, so inner product *is* cosine similarity.
     index = faiss.IndexFlatIP(pool_array.shape[1])
@@ -372,6 +562,68 @@ def _embedding_neighbours(
 #: an inline `Any` so the reason travels with it.
 Encoder = Any
 
+#: A float32 matrix, one L2-normalized row per name. numpy is a transitive
+#: dependency of the embedding stack rather than a declared one, so it is typed
+#: as opaque here for the same reason the encoder is.
+Vectors = Any
+
+_VECTORS: dict[str, Any] = {}
+_VECTORS_LOCK = threading.Lock()
+_ENCODER_LOCK = threading.Lock()
+
+
+def _embed(names: list[str]) -> Vectors | None:
+    """One normalized vector per name, encoding only names not already cached.
+
+    Each distinct name is encoded once however many times it appears. The two
+    sides of a reconciliation spell almost every name identically, and the same
+    entities are a query in one direction and a pool member in the other, so
+    deduplicating here is most of the saving on its own.
+    """
+    try:
+        import numpy as np
+    except Exception:
+        return None
+
+    model = _encoder()
+    if model is None:
+        return None
+
+    unique = list(dict.fromkeys(names))
+    with _VECTORS_LOCK:
+        known = {name: _VECTORS[name] for name in unique if name in _VECTORS}
+
+    missing = [name for name in unique if name not in known]
+    if missing:
+        try:
+            encoded = model.encode(
+                missing,
+                batch_size=EMBEDDING_BATCH_SIZE,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
+        except Exception:
+            return None
+
+        fresh = dict(zip(missing, np.asarray(encoded, dtype="float32"), strict=True))
+        known.update(fresh)
+        with _VECTORS_LOCK:
+            if len(_VECTORS) + len(fresh) > _VECTOR_CACHE_LIMIT:
+                _VECTORS.clear()
+            _VECTORS.update(fresh)
+
+    return np.asarray([known[name] for name in names], dtype="float32")
+
+
+def _encoder() -> Encoder | None:
+    """The process's encoder, loaded at most once even when two threads ask.
+
+    The startup warm-up and a run's match stage can race; without the lock both
+    would load the weights and one copy would be thrown away.
+    """
+    with _ENCODER_LOCK:
+        return _load_encoder()
+
 
 @functools.lru_cache(maxsize=1)
 def _load_encoder() -> Encoder | None:
@@ -381,10 +633,23 @@ def _load_encoder() -> Encoder | None:
     systems over the same data: without this the weights are re-read from disk
     a dozen times per invocation, which dominates the runtime of a stage whose
     entire purpose is to be cheap.
+
+    Local files first. When the weights are already cached the hub has nothing
+    to add, and asking it anyway costs several seconds of network round trips
+    per process — longer than loading the model. Only a machine that has never
+    downloaded them falls through to the network.
     """
     try:
         from sentence_transformers import SentenceTransformer
+    except Exception:
+        return None
 
+    try:
+        return SentenceTransformer(EMBEDDING_MODEL, local_files_only=True)
+    except Exception:
+        pass
+
+    try:
         return SentenceTransformer(EMBEDDING_MODEL)
     except Exception:
         return None

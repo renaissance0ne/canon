@@ -1,5 +1,7 @@
+import { Term } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
+import { STAT_HELP } from "@/lib/glossary";
 import { isStatKnown, type RunStats, type RunStatus } from "@/types/run";
 
 /** Label and order for every headline number a run produces. */
@@ -61,7 +63,9 @@ export function StatGrid({
               index >= 4 && "border-t border-hairline",
             )}
           >
-            <dt className="text-label uppercase text-g-500">{label}</dt>
+            <dt className="text-label uppercase text-g-500">
+              <Term content={STAT_HELP[key]}>{label}</Term>
+            </dt>
             <dd
               className={cn(
                 "mt-0.5 font-mono text-value",

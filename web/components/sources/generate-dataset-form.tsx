@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Field, fieldAria } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { InfoTip } from "@/components/ui/tooltip";
 import { postJson } from "@/lib/api-client";
+import { INJECTION_HELP, TERM_HELP } from "@/lib/glossary";
 import {
   DEFAULT_INJECTION_RATES,
   INJECTION_META,
@@ -126,7 +128,13 @@ export function GenerateDatasetForm({ existing }: { existing: string[] }) {
           />
         </Field>
 
-        <Field label="Seed" htmlFor={seedId} hint="Same seed, same bytes." error={errors.seed}>
+        <Field
+          label="Seed"
+          htmlFor={seedId}
+          hint="Same seed, same bytes."
+          tip={TERM_HELP.seed.text}
+          error={errors.seed}
+        >
           <Input
             {...fieldAria(seedId, { hint: true, error: Boolean(errors.seed) })}
             value={seed}
@@ -140,6 +148,7 @@ export function GenerateDatasetForm({ existing }: { existing: string[] }) {
           label="Accounts"
           htmlFor={accountsId}
           hint="Users, roles and territories scale with it."
+          tip="Between 1 and 20,000. Generation runs on the engine and takes about a tenth of a second at 500 accounts and about eight seconds at the ceiling."
           error={errors.accounts}
         >
           <Input
@@ -174,12 +183,18 @@ export function GenerateDatasetForm({ existing }: { existing: string[] }) {
                 key={key}
                 className="flex items-center gap-4 border-b border-hairline py-2 last:border-b-0"
               >
-                <label htmlFor={fieldId} className="flex-1 text-body text-g-900">
-                  {INJECTION_META[key].label}
-                  <span className="ml-2 font-mono text-value text-g-500">
-                    tests {INJECTION_META[key].tests}
-                  </span>
-                </label>
+                <div className="flex flex-1 items-center gap-1">
+                  <label htmlFor={fieldId} className="text-body text-g-900">
+                    {INJECTION_META[key].label}
+                    <span className="ml-2 font-mono text-value text-g-500">
+                      tests {INJECTION_META[key].tests}
+                    </span>
+                  </label>
+                  <InfoTip
+                    label={`About ${INJECTION_META[key].label}`}
+                    content={INJECTION_HELP[key]}
+                  />
+                </div>
                 <div className="flex w-[92px] shrink-0 items-center gap-1.5">
                   <Input
                     id={fieldId}

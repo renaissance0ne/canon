@@ -193,9 +193,12 @@ def _duplicate_matches(matches: list[Match]) -> dict[UUID, UUID]:
     """Match id → the entity being duplicated, for links that are duplicates.
 
     A duplicate presents as one entity on one side appearing in more than one
-    match. The strongest link (an exact external-id agreement scores 1.0) is
-    taken to be the real record; every weaker link into the same entity is the
-    spurious copy. Ties keep discovery order, so the result is deterministic.
+    match. The strongest link is taken to be the real record; every weaker link
+    into the same entity is the spurious copy. An exact external-id agreement
+    always wins, even against a name link that also scores 1.0 — an id shared
+    by both systems is identity, and a perfect name with perfect field
+    agreement is still only evidence. Remaining ties keep discovery order, so
+    the result is deterministic.
 
     The shared entity is returned along with the match id because it — not the
     freshly minted copy — is the real-world thing the conflict is *about*. A
@@ -212,7 +215,7 @@ def _duplicate_matches(matches: list[Match]) -> dict[UUID, UUID]:
     for shared_entity_id, linked in by_counterpart.items():
         if len(linked) < 2:
             continue
-        strongest = max(linked, key=lambda m: m.confidence)
+        strongest = max(linked, key=lambda m: (m.signals.exact_key, m.confidence))
         for match in linked:
             if match is not strongest:
                 duplicates[_match_id(match)] = shared_entity_id

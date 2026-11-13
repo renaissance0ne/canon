@@ -30,6 +30,7 @@ from agent.graph import (
     Proposer,
     build_proposer,
     missing_key_message,
+    model_concurrency,
     resolve,
 )
 from agent.prompts import resolution_model
@@ -280,8 +281,16 @@ def execute(
     rules: list[SurvivorshipRule] | None = None,
     proposer: Proposer | None = None,
     usage: ModelUsage | None = None,
+    max_concurrency: int = 1,
 ) -> SystemRun:
-    """``run_system``, keeping the intermediate output for ablations."""
+    """``run_system``, keeping the intermediate output for ablations.
+
+    ``max_concurrency`` is the same knob production uses and changes wall-clock
+    only. Leave it at 1 whenever the proposer has a call ceiling: concurrency
+    would make which conflicts receive the capped budget depend on thread
+    timing, and a benchmark whose answer set varies between two runs of the
+    same seed is not one.
+    """
     rules = rules if rules is not None else DEFAULT_RULESET
     side_a, side_b = load_sides(data_dir)
 
@@ -300,6 +309,7 @@ def execute(
             origins=detection.origins,
             proposer=proposer,
             labels=LABELS,
+            max_concurrency=max_concurrency,
         )
 
     metrics = score_run(
@@ -644,6 +654,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"resolution   {resolution_model(provider) if proposer else '(no model)'}")
     if max_calls is not None:
         print(f"call ceiling {max_calls}")
+
+    # Concurrency only when nothing is capped — see `execute`.
+    concurrency = 1 if max_calls is not None else model_concurrency()
+    if proposer is not None:
+        print(f"concurrency  {concurrency}")
     print()
 
     runs: dict[System, SystemRun] = {}
@@ -655,6 +670,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             data_dir,
             proposer=proposer if system == "canon_full" else None,
             usage=usage,
+            max_concurrency=concurrency,
         )
         _print_metrics(system, runs[system].metrics)
 
@@ -746,8 +762,8 @@ def _print_metrics(label: str, metrics: Metrics) -> None:
         )
     if metrics.model_errors:
         print(
-            f"  !! model errors     {metrics.model_errors} calls failed and escalated "
-            f"instead -- these numbers are NOT the agent's"
+            f"  !! model errors     {metrics.model_errors} conflicts got no model answer and "
+            f"escalated instead -- these numbers are NOT the agent's"
         )
         print(f"     first error      {metrics.first_error}")
     print()

@@ -139,11 +139,22 @@ def rule_specificity(rule: SurvivorshipRule) -> int:
 
 
 class MatchSignals(CanonModel):
-    """What the combined confidence was computed from."""
+    """What the combined confidence was computed from.
+
+    Mirrors web/types/conflict.ts::matchSignalsSchema.
+    """
 
     exact_key: bool
     cosine: float
+    #: 0..1, not 0..100 — RapidFuzz's percentage is divided down at the source.
     fuzzy_ratio: float
+    #: Of the fields BOTH records populate (the hierarchy edge and every shared
+    #: attribute), the fraction that agree after folding. ``None`` when too few
+    #: are comparable for agreement to be evidence of anything.
+    #:
+    #: Optional on the wire because match rows written before this signal
+    #: existed do not carry it, and a reader must not have to guess a default.
+    field_agreement: float | None = None
 
 
 class Match(CanonModel):
@@ -216,8 +227,11 @@ class RunStats(CanonModel):
     # at all.
     #: Model requests that returned an answer.
     model_calls: int = 0
-    #: Requests that failed and escalated instead. Every one of these is an
-    #: escalation that is NOT a statement about the conflict.
+    #: Conflicts sent to the model that came back without an answer and
+    #: escalated instead — failed requests, plus any not sent at all because an
+    #: earlier call failed in a way every call would (a rejected key, an empty
+    #: credit balance). Every one of these is an escalation that is NOT a
+    #: statement about the conflict.
     model_errors: int = 0
     #: Requests the provider throttled and that were retried. Cost wall-clock,
     #: not correctness — a run can be slow and still be entirely trustworthy.

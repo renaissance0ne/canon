@@ -1,5 +1,7 @@
 import { VERDICT_LABEL, type RunScorecard, type Verdict } from "@/types/ground-truth";
+import { Term } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
+import { TERM_HELP, VERDICT_HELP } from "@/lib/glossary";
 
 /**
  * A run measured against the manifest.
@@ -35,13 +37,17 @@ export function RunScorecardGrid({
   return (
     <div className={cn("flex flex-col gap-5", className)}>
       <dl className="grid grid-cols-2 border-t border-hairline-strong sm:grid-cols-4">
-        <Stat label="Injected" value={scorecard.expected} />
+        <Stat label="Injected" value={scorecard.expected} help={TERM_HELP.groundTruth.text} />
         <Stat
           label="Detected"
           value={scorecard.detected}
           note={`${(recall * 100).toFixed(1)}% recall`}
         />
-        <Stat label="Not detected" value={scorecard.byVerdict.missed} />
+        <Stat
+          label="Not detected"
+          value={scorecard.byVerdict.missed}
+          help={VERDICT_HELP.missed}
+        />
         <Stat
           label="Not in ground truth"
           value={scorecard.notInTruth}
@@ -54,6 +60,7 @@ export function RunScorecardGrid({
           <Stat
             key={verdict}
             label={VERDICT_LABEL[verdict]}
+            help={VERDICT_HELP[verdict]}
             value={scorecard.byVerdict[verdict]}
             emphasis={verdict === "false_auto_apply"}
           />
@@ -67,16 +74,21 @@ function Stat({
   label,
   value,
   note,
+  help,
   emphasis = false,
 }: {
   label: string;
   value: number;
   note?: string;
+  /** What the number means, behind the label. */
+  help?: string;
   emphasis?: boolean;
 }) {
   return (
     <div className="border-b border-hairline py-2.5 pr-4">
-      <dt className="text-label uppercase text-g-500">{label}</dt>
+      <dt className="text-label uppercase text-g-500">
+        {help ? <Term content={help}>{label}</Term> : label}
+      </dt>
       <dd
         className={cn(
           "mt-1 font-mono text-[20px] leading-6 text-g-900",

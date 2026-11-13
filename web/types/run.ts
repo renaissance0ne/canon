@@ -54,7 +54,12 @@ export const runStatsSchema = z.object({
    * reading of an old row: nothing is known to have failed.
    */
   modelCalls: z.number().int().nonnegative().default(0),
-  /** Escalations that are NOT a statement about the conflict. */
+  /**
+   * Conflicts sent to the model that came back with no answer — failed
+   * requests, plus any the engine stopped sending after an error every call
+   * would repeat (a rejected key, an empty credit balance). Escalations that
+   * are NOT a statement about the conflict.
+   */
   modelErrors: z.number().int().nonnegative().default(0),
   /** Throttled and retried. Cost wall-clock, not correctness. */
   modelRateLimited: z.number().int().nonnegative().default(0),

@@ -1,4 +1,6 @@
+import { Term } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
+import { STAGE_HELP } from "@/lib/glossary";
 import { RUN_STAGES, runStageIndex, type RunStage, type RunStatus } from "@/types/run";
 
 /**
@@ -52,7 +54,9 @@ export function RunStageBar({
                 !current && !reached && (failed ? "text-g-300" : "text-g-400"),
               )}
             >
-              {stage}
+              <Term content={STAGE_HELP[stage]} side="bottom">
+                {stage}
+              </Term>
             </span>
           </span>
         );

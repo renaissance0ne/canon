@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Field, fieldAria } from "@/components/ui/field";
+import { TERM_HELP } from "@/lib/glossary";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +19,14 @@ import {
   type Source,
   type SourceKind,
 } from "@/types/source";
+
+/** The concept behind each field, behind its `?`. */
+const KIND_HELP =
+  "Which system this source reads. Salesforce and HubSpot are CRM sides, Databricks and Snowflake " +
+  "are warehouse sides, and a synthetic source can stand in for either. A run pairs one of each.";
+const CONFIG_HELP =
+  "JSON describing what to read — object or table names and an optional filter. It must never hold a " +
+  "password, token or key: credentials are stored separately, encrypted, and no screen ever shows them.";
 
 const KINDS = sourceKindSchema.options;
 
@@ -163,6 +172,7 @@ export function AddSourceForm({
       <Field
         label="Kind"
         htmlFor={kindId}
+        tip={KIND_HELP}
         hint={`${KINDS.join(" · ")} — ${sideHint(kind)}`}
         error={errors.kind}
       >
@@ -183,6 +193,7 @@ export function AddSourceForm({
         <Field
           label="Dataset"
           htmlFor={datasetId}
+          tip={TERM_HELP.synthetic.text}
           hint={
             datasets.length > 0 ? (
               <>
@@ -227,6 +238,7 @@ export function AddSourceForm({
       <Field
         label="Config · non-secret shape only"
         htmlFor={configId}
+        tip={CONFIG_HELP}
         hint="Object or table names, and an optional filter. Nothing else is read."
         error={errors.config}
       >
@@ -239,8 +251,9 @@ export function AddSourceForm({
       </Field>
 
       <p className="max-w-[440px] border-l-2 border-g-900 pl-3 text-body text-g-600">
-        Credentials live in the engine environment, keyed by kind. Nothing secret
-        is stored on this record.
+        {requiresCredentials(kind)
+          ? "Credentials are entered on the next screen, encrypted before they are stored, and never shown again. Nothing secret is stored on this record."
+          : "Synthetic sources read a dataset from the engine’s disk and need no credentials."}
       </p>
 
       {message ? (

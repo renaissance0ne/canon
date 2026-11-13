@@ -1,6 +1,13 @@
+import { InfoTip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
+import { TERM_HELP } from "@/lib/glossary";
 import { deriveRuleTrace } from "@/lib/rule-trace";
 import type { QueueRow } from "@/types/queue";
+
+/** The trace's one line of help: what fired, and what "skipped" claims. */
+const RULE_TRACE_HELP =
+  `${TERM_HELP.ruleTrace.text} A node marked skipped did not run — ` +
+  "propose · skipped means no model was asked about this conflict.";
 
 /**
  * Wireframe 1j — the rule trace.
@@ -24,7 +31,10 @@ export function RuleTrace({ row, className }: { row: QueueRow; className?: strin
 
   return (
     <div className={className}>
-      <p className="text-label uppercase text-g-500">Rule trace</p>
+      <p className="flex items-center gap-1 text-label uppercase text-g-500">
+        Rule trace
+        <InfoTip label="About the rule trace" content={RULE_TRACE_HELP} />
+      </p>
       <ol className="mt-1 flex flex-col gap-0.5">
         {steps.map((step) => (
           <li

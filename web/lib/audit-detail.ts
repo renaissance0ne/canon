@@ -86,7 +86,7 @@ export function auditDetailParts(entry: AuditEntry): string[] {
   // Agent health, on `run_degraded`. The failure count leads: it is the number
   // that says how much of `escalated` is not a judgement.
   const modelErrors = num(detail, "modelErrors");
-  if (modelErrors !== null) parts.push(`${formatCount(modelErrors)} model calls failed`);
+  if (modelErrors !== null) parts.push(`${formatCount(modelErrors)} unanswered by the model`);
 
   const throttled = num(detail, "modelRateLimited");
   if (throttled !== null && throttled > 0) {

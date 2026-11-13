@@ -101,7 +101,13 @@ function Side({
           company before agreeing that one system is double-counting it (1m). */}
       {side.values.length > 1 ? (
         <p className="font-mono text-[11px] leading-4 text-g-500">
-          cosine {signals.cosine.toFixed(2)} · fuzzy {Math.round(signals.fuzzyRatio)}
+          {/* `fuzzyRatio` and `fieldAgreement` are both 0..1 on the wire, so
+              they are scaled here — rounding the raw ratio printed "fuzzy 1"
+              for every near-identical name. */}
+          cosine {signals.cosine.toFixed(2)} · fuzzy {Math.round(signals.fuzzyRatio * 100)}
+          {typeof signals.fieldAgreement === "number"
+            ? ` · fields ${Math.round(signals.fieldAgreement * 100)}% agree`
+            : ""}
           {signals.exactKey ? " · exact key" : ""}
         </p>
       ) : null}

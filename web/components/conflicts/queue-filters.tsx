@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
+import { QUEUE_VIEW_HELP, SEVERITY_HELP } from "@/lib/glossary";
 import { SEVERITY_LABEL, SEVERITY_ORDER, type Severity } from "@/types/conflict";
 import {
   QUEUE_STATUS_LABEL,
@@ -59,25 +61,27 @@ export function QueueFilters({
       <div className="flex flex-wrap items-center gap-1.5">
         {queueStatusFilterSchema.options.map((status) => {
           const active = query.status === status;
+          const tipId = `queue-status-${status}`;
           return (
-            <Link
-              key={status}
-              href={href({ status, page: undefined })}
-              aria-current={active ? "true" : undefined}
-              title={QUEUE_STATUS_PURPOSE[status]}
-              className={cn(
-                "inline-flex h-7 items-center gap-1.5 rounded-[2px] border px-2 text-[11px] no-underline",
-                "font-sans transition-colors duration-[80ms] ease-canon",
-                active
-                  ? "border-g-900 bg-g-900 text-g-0"
-                  : "border-hairline-strong bg-g-0 text-g-700 hover:border-g-900 hover:text-g-900",
-              )}
-            >
-              {QUEUE_STATUS_LABEL[status]}
-              <span className="font-mono tabular-nums">
-                {formatCount(statusCount[status] ?? 0)}
-              </span>
-            </Link>
+            <Tooltip key={status} id={tipId} content={QUEUE_STATUS_PURPOSE[status]} side="bottom">
+              <Link
+                href={href({ status, page: undefined })}
+                aria-current={active ? "true" : undefined}
+                aria-describedby={tipId}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1.5 rounded-[2px] border px-2 text-[11px] no-underline",
+                  "font-sans transition-colors duration-[80ms] ease-canon",
+                  active
+                    ? "border-g-900 bg-g-900 text-g-0"
+                    : "border-hairline-strong bg-g-0 text-g-700 hover:border-g-900 hover:text-g-900",
+                )}
+              >
+                {QUEUE_STATUS_LABEL[status]}
+                <span className="font-mono tabular-nums">
+                  {formatCount(statusCount[status] ?? 0)}
+                </span>
+              </Link>
+            </Tooltip>
           );
         })}
       </div>
@@ -100,24 +104,26 @@ export function QueueFilters({
 
       <div className="ml-auto flex flex-wrap items-center gap-1.5">
         <span className="text-label uppercase text-g-500">View</span>
-        {QUEUE_VIEWS.map(({ view, label, hint }) => {
+        {QUEUE_VIEWS.map(({ view, label }) => {
           const active = query.view === view;
+          const tipId = `queue-view-${view}`;
           return (
-            <Link
-              key={view}
-              href={href({ view, page: undefined })}
-              title={hint}
-              aria-current={active ? "true" : undefined}
-              className={cn(
-                "inline-flex h-7 items-center rounded-[2px] border px-2 text-[11px] no-underline",
-                "font-sans transition-colors duration-[80ms] ease-canon",
-                active
-                  ? "border-g-900 text-g-900"
-                  : "border-transparent text-g-500 hover:text-g-900",
-              )}
-            >
-              {label}
-            </Link>
+            <Tooltip key={view} id={tipId} content={QUEUE_VIEW_HELP[view]} side="bottom">
+              <Link
+                href={href({ view, page: undefined })}
+                aria-describedby={tipId}
+                aria-current={active ? "true" : undefined}
+                className={cn(
+                  "inline-flex h-7 items-center rounded-[2px] border px-2 text-[11px] no-underline",
+                  "font-sans transition-colors duration-[80ms] ease-canon",
+                  active
+                    ? "border-g-900 text-g-900"
+                    : "border-transparent text-g-500 hover:text-g-900",
+                )}
+              >
+                {label}
+              </Link>
+            </Tooltip>
           );
         })}
       </div>
@@ -145,36 +151,40 @@ function SeverityChip({
   active: boolean;
   href: string;
 }) {
+  const tipId = `queue-severity-${severity}`;
   return (
-    <Link
-      href={href}
-      aria-pressed={active}
-      className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-[2px] border px-1.5 no-underline",
-        "transition-colors duration-[80ms] ease-canon",
-        active ? "border-g-900 bg-g-100" : "border-hairline hover:border-hairline-strong",
-      )}
-    >
-      <span
-        aria-hidden
+    <Tooltip id={tipId} content={SEVERITY_HELP[severity]} side="bottom">
+      <Link
+        href={href}
+        aria-pressed={active}
+        aria-describedby={tipId}
         className={cn(
-          "font-mono text-[10px] leading-none tracking-[0.06em]",
-          severity >= 3 ? "text-g-900" : "text-g-500",
+          "inline-flex h-7 items-center gap-1.5 rounded-[2px] border px-1.5 no-underline",
+          "transition-colors duration-[80ms] ease-canon",
+          active ? "border-g-900 bg-g-100" : "border-hairline hover:border-hairline-strong",
         )}
       >
-        {"█".repeat(severity)}
-        {"░".repeat(4 - severity)}
-      </span>
-      <span className="font-mono text-[11px] tabular-nums text-g-600">
-        {formatCount(count)}
-      </span>
-      {/* The mark is never the only signal — the word is here for a screen reader
-          even where the chip has no room to print it. */}
-      <span className="sr-only">
-        {SEVERITY_LABEL[severity]} severity {severity}
-        {active ? ", filtering" : ""}
-      </span>
-    </Link>
+        <span
+          aria-hidden
+          className={cn(
+            "font-mono text-[10px] leading-none tracking-[0.06em]",
+            severity >= 3 ? "text-g-900" : "text-g-500",
+          )}
+        >
+          {"█".repeat(severity)}
+          {"░".repeat(4 - severity)}
+        </span>
+        <span className="font-mono text-[11px] tabular-nums text-g-600">
+          {formatCount(count)}
+        </span>
+        {/* The mark is never the only signal — the word is here for a screen reader
+            even where the chip has no room to print it. */}
+        <span className="sr-only">
+          {SEVERITY_LABEL[severity]} severity {severity}
+          {active ? ", filtering" : ""}
+        </span>
+      </Link>
+    </Tooltip>
   );
 }
 

@@ -36,10 +36,12 @@ export function RunDegradedNote({ run }: { run: RunDetail }) {
       <p className="text-label uppercase text-g-900">Degraded · escalations are not all judgements</p>
 
       <p className="mt-2 max-w-[520px] text-body text-g-700">
-        {formatCount(modelErrors)} of {formatCount(attempted)}{" "}
-        {MODEL_PROVIDER_LABEL[run.modelProvider]} calls failed and escalated
-        instead of answering. Those conflicts carry no opinion — the agent was
-        never asked successfully.
+        {formatCount(modelErrors)} of {formatCount(attempted)} conflicts sent to{" "}
+        {MODEL_PROVIDER_LABEL[run.modelProvider]} came back without an answer
+        and escalated instead. Those conflicts carry no opinion — the agent was
+        never asked successfully. When the cause would fail every call (a
+        rejected key, an empty credit balance), Canon stops asking after the
+        first one rather than collecting the same error per conflict.
       </p>
 
       {/* The arithmetic, spelled out. A reviewer about to open the queue needs

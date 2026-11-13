@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Field, fieldAria } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
+import { InfoTip } from "@/components/ui/tooltip";
+import { TERM_HELP } from "@/lib/glossary";
 import { postJson } from "@/lib/api-client";
 import {
   AUTO_APPLY_GATE,
@@ -169,7 +171,7 @@ export function NewRunForm({
       {/* The spine. Fixed 50/50, one hairline, and it never moves. */}
       <div className="grid grid-cols-1 gap-px bg-hairline-strong md:grid-cols-2">
         <div className="bg-surface p-4">
-          <Field label="Source A · CRM" htmlFor={aId}>
+          <Field label="Source A · CRM" htmlFor={aId} tip={TERM_HELP.sourceA.text}>
             <Select
               {...fieldAria(aId, {})}
               value={sourceAId}
@@ -187,7 +189,7 @@ export function NewRunForm({
         </div>
 
         <div className="bg-surface p-4">
-          <Field label="Source B · warehouse" htmlFor={bId}>
+          <Field label="Source B · warehouse" htmlFor={bId} tip={TERM_HELP.sourceB.text}>
             <Select
               {...fieldAria(bId, {})}
               value={sourceBId}
@@ -231,6 +233,7 @@ export function NewRunForm({
       <Field
         label="Ruleset"
         htmlFor={rulesetFieldId}
+        tip={TERM_HELP.ruleset.text}
         hint="The version this run executes under. Recorded on the run, so it stays reproducible."
       >
         <Select
@@ -254,6 +257,7 @@ export function NewRunForm({
       <Field
         label="Resolution model"
         htmlFor={providerFieldId}
+        tip={TERM_HELP.modelProvider.text}
         hint="Resolves the conflicts the ruleset does not decide. Recorded on the run."
       >
         <Select
@@ -292,7 +296,10 @@ export function NewRunForm({
           could edit them would make two runs at "the same" threshold mean
           different things. */}
       <div className="border border-hairline bg-surface-sunken px-4 py-3">
-        <p className="text-label uppercase text-g-500">Auto-apply gate · read-only</p>
+        <p className="flex items-center gap-1 text-label uppercase text-g-500">
+          Auto-apply gate · read-only
+          <InfoTip label="About the auto-apply gate" content={TERM_HELP.autoApplyGate.text} />
+        </p>
         <p className="mt-1 font-mono text-value text-g-900">
           confidence ≥ {AUTO_APPLY_GATE.confidenceThreshold.toFixed(2)}{" "}
           <span className="font-medium">AND</span> severity ≤{" "}

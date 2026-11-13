@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Term } from "@/components/ui/tooltip";
+import { TERM_HELP } from "@/lib/glossary";
 import type { DatasetSummary } from "@/types/dataset";
 
 /**
@@ -24,12 +26,18 @@ export function DatasetTable({
       <thead>
         <tr className="border-b border-hairline-strong text-left">
           <Th>Name</Th>
-          <Th>Seed</Th>
+          <Th>
+            <Term content={TERM_HELP.seed.text}>Seed</Term>
+          </Th>
           <Th className="text-right">Accounts</Th>
           <Th className="text-right">Side A</Th>
           <Th className="text-right">Side B</Th>
-          <Th className="text-right">Divergences</Th>
-          <Th className="text-right">Escalate</Th>
+          <Th className="text-right">
+            <Term content={DIVERGENCES_HELP}>Divergences</Term>
+          </Th>
+          <Th className="text-right">
+            <Term content={ESCALATE_HELP}>Escalate</Term>
+          </Th>
           <Th>Classes</Th>
         </tr>
       </thead>
@@ -73,6 +81,12 @@ function classes(dataset: DatasetSummary): string {
     .map(([name, count]) => `${name} ${count}`)
     .join(" · ");
 }
+
+/** Column explanations for the two ground-truth counts. */
+const DIVERGENCES_HELP =
+  "Injected differences between side A and side B, each recorded in the ground-truth manifest with its correct resolution.";
+const ESCALATE_HELP =
+  "Of those, how many are genuinely ambiguous — the correct answer is to escalate. A dataset with none cannot score escalation.";
 
 function Th({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
